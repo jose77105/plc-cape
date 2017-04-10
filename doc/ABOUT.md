@@ -1,11 +1,19 @@
-# plc-cape
+ABOUT {#mainpage}
+=====
+
+## PROJECT NAME
+
+<b><i>plc-cape</i></b>
+
+## PURPOSE
 
 Software framework for the **PlcCape** board, an AFE031-based cape for the BeagleBone Black designed
 for Communications over Power Lines (PLC).
 
-**PlcCape-v1 board** | **PlcCape-v2 board**
--------------------- | --------------------
-![PlcCape-v1 board](doc/images/PlcCapeV1.jpg) | ![PlcCape-v2 board](doc/images/PlcCapeV2.jpg)
+<table border=0><tr>
+<td>![PlcCape-v1 board](doc/images/PlcCapeV1.jpg)
+<td>![PlcCape-v2 board](doc/images/PlcCapeV2.jpg)
+</table>
 
 Full documentation about the software framework (and some electronics) is available at
 [PlcCapeSoftwareFramework.pdf](http://upcommons.upc.edu/bitstream/handle/2117/98244/PlcCapeSoftwareFramework.pdf)
@@ -17,13 +25,11 @@ Documentation about the electronic framework is in progress
 
 ## CURRENT STATUS OF THE DEVELOPMENT
 
-The software is in an early phase (hence the version 0.1).
-
+The software is in an early phase (hence the version 0.1).\n
 The framework is consistent and stable but the specific implementation of each component would
 still require considerable refactoring, bug fixing and improvements
 
 **Update 10-Apr-2017:**
-
 A version 0.2 with more appications, plugins, improvements and bug fixing is in progress
 
 ## LICENSE
@@ -42,7 +48,7 @@ A version 0.2 with more appications, plugins, improvements and bug fixing is in 
 	You should have received a copy of the GNU General Public License
 	along with this project.  If not, see <http://www.gnu.org/licenses/>
 </pre>
-For full terms see [LICENSE](LICENSE)
+For full terms see @subpage license
 
 ## COPYRIGHT
 
