@@ -29,12 +29,11 @@ still require considerable refactoring, bug fixing and improvements
 
 * Download source code and decompress it on any local folder
 * Compile the source code depending on your needs:
-** To compile the whole framework just execute **make** from the root folder.
-** To compile the BBB custom drivers (for SPI-DAC and ADC) go to the drivers folder and execute
-**make**
-** To compile the framework for a specific configuration use the PROFILE option like:
-*** **make PROFILE=debug.bbb**
-*** **make PROFILE=release.bbb**
+  * To compile the whole framework just execute `make` from the root folder
+  * To compile the BBB custom drivers (for SPI-DAC and ADC) go to the drivers folder and execute `make`
+  * To compile the framework for a specific configuration use the PROFILE option like:
+    * `make PROFILE=debug.bbb`
+    * `make PROFILE=release.bbb`
 
 
 ## LICENSE

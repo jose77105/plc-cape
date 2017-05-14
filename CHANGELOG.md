@@ -1,7 +1,7 @@
 CHANGELOG
 =========
 
-### 0.2 [14-Mai-2017]
+### 0.2 [14-May-2017]
 Second beta release
 
 New applications:
@@ -14,8 +14,8 @@ New plugins:
 * decoder-morse
 
 Emulator:
-* Emulation mode provided to allow the execution of the whole framework relying on ALSA system
-to simulate a DAC (spekar) and an ADC (microphone)
+* Emulation mode provided to allow the execution of the whole framework in a desktop-PC.
+It relies on the ALSA subsystem to simulate a DAC (via the speakers) and an ADC (via a microphone)
 
 New features in 'plc-cape-lab':
 * customizable profiles through 'profiles.xml'
@@ -25,4 +25,4 @@ New features in 'plc-cape-lab':
 Generic improvements + refactoring + bug fixing
 
 ### 0.1 [Sep-2016]
-* First beta release
+First beta release
