@@ -41,7 +41,7 @@ ifneq ("$(wildcard $(TMP_SOURCES_AT_BIN_DIR))","")
 			"'$(DRIVER_BIN_DIR)' that will be overwritten"
 endif
 	@echo Copying source code files to '$(DRIVER_BIN_DIR)'
-	@cp --interactive --preserve $(SOURCES) $(DRIVER_BIN_DIR)
+	@cp --interactive --preserve=timestamps $(SOURCES) $(DRIVER_BIN_DIR)
 	@echo obj-m += $(OBJECTS) > $(DRIVER_BIN_DIR)/makefile
 # Note 1: The typical 'M=$(PWD)' points to the Makefile's location instead of '$(DRIVER_BIN_DIR)'
 # Note 2: Notice the '-' at the beginning of the command. It means 'continue even if error'

@@ -2,7 +2,7 @@
  * @file
  * 
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -92,7 +92,7 @@ void add_plugins(struct plc_plugin_list *plc_plugin_list, const char *plugins_di
 ATTR_EXTERN struct plc_plugin_list *plc_plugin_list_create(enum plc_plugin_category category)
 {
 	struct plc_plugin_list *plc_plugin_list = calloc(1, sizeof(*plc_plugin_list));
-	// For simplicity just allocate a long-enough vector to accomodate all the possible plugins
+	// For simplicity just allocate a long-enough vector to accommodate all the possible plugins
 	plc_plugin_list->list_count = PLUGINS_MAX_ITEMS;
 	plc_plugin_list->list = malloc(PLUGINS_MAX_ITEMS * sizeof(char*));
 	plc_plugin_list->active_index = 0;

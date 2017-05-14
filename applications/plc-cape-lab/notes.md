@@ -36,15 +36,15 @@ plc-cape-lab {#application-plc-cape-lab}
 
 	  -A:MODE       Select ADC receiving mode
 	  -d            Forces the application to use the standard drivers
-	  -D:INTERVAL   Max duration for the test [ms]
-	  -F:BPS        SPI bit rate [bps]
-	  -H:FREQ       Signal frequency [Hz]
+	  -D:id=value   Speficy a DECODER 'value' for a setting identified as 'id'
+	  -E:id=value   Speficy an ENCODER 'value' for a setting identified as 'id'
+	  -F:SPS        SPI sampling rate [sps]
 	  -I:INTERVAL   Repetitive test interval [ms]
+	  -J:INTERVAL   Max duration for the test [ms]
 	  -L:DELAY      Samples delay [us]
 	  -N:SIZE       Buffer size [samples]
-	  -O:OFFSET     Signal offset [DAC value]
 	  -P:PROFILE    Select a predefined profile
-	  -R:RANGE      Signal range [DAC value]
+	  -q            Quiet mode
 	  -S:MODE       SPI transmitting mode
 	  -T:MODE       Operating mode
 	  -U:NAME       UI plugin name (without extension)

@@ -24,15 +24,16 @@
  *		along with plc-cape project.  If not, see <http://www.gnu.org/licenses/>. 
  *
  * @copyright
- *	Copyright (C) 2016 Jose Maria Ortega
+ *	Copyright (C) 2016-2017 Jose Maria Ortega
  * 
  * @endcond
  */
 
-#define _GNU_SOURCE			// Required for 'asprintf' declaration
-#include <signal.h>			// signal
-#include <unistd.h>			// sleep
+#define _GNU_SOURCE				// Required for 'asprintf' declaration
+#include <signal.h>				// signal
+#include <unistd.h>				// sleep
 #include "+common/api/+base.h"
+#include "+common/api/bbb.h"	// ADC_MAX_CAPTURE_RATE_SPS
 #include "libraries/libplc-adc/api/adc.h"
 #include "libraries/libplc-cape/api/afe.h"
 #include "libraries/libplc-cape/api/leds.h"
@@ -49,12 +50,16 @@
 
 #define KEY_CODE_ESCAPE 27
 
-#define DAC_RANGE 1024
 #define DAC_WAVE_MIN_VALUE 700
 #define DAC_WAVE_MAX_VALUE 900
 #define DAC_WAVE_MEAN_VALUE ((DAC_WAVE_MAX_VALUE+DAC_WAVE_MIN_VALUE)/2)
 
 #define ADC_CAPTURE_FILENAME "adc.csv"
+
+#define FREQ_DAC_BBB_SPS 70000
+#define FREQ_ADC_BBB_SPS ADC_MAX_CAPTURE_RATE_SPS
+#define FREQ_DAC_ALSA_SPS 8000
+#define FREQ_ADC_ALSA_SPS 8000
 
 #define TX_BUFFER_LEN 1024
 #define RX_BUFFER_LEN 1024
@@ -63,10 +68,14 @@ static struct plc_terminal_io *plc_terminal_io;
 static struct plc_cape *plc_cape = NULL;
 // Use 'plc_afe' as a shortcut to access AFE functionality
 static struct plc_afe *plc_afe = NULL;
+static float freq_dac_sps;
+static float freq_adc_sps;
+static enum plc_tx_device_enum plc_tx_device;
+static enum plc_rx_device_enum plc_rx_device;
 
 // We can rely on the default tracing support offered by 'lipplc-tools'
-int plc_debug_level = 3;
-void (*plc_trace)(const char *function_name, const char *format, ...) = plc_trace_default;
+// int plc_debug_level = 3;
+// void (*plc_trace)(const char *function_name, const char *format, ...) = plc_trace_default;
 
 int set_error_msg(const char *msg)
 {
@@ -108,7 +117,7 @@ void test_afe_info(void)
 void test_adc(void)
 {
 	puts("ADC real-time value displayed\nPress a key to stop the loop...");
-	struct plc_adc *plc_adc = plc_adc_create(PLC_DRIVERS);
+	struct plc_adc *plc_adc = plc_adc_create(plc_rx_device);
 	while (!plc_terminal_io_kbhit(plc_terminal_io))
 	{
 		sample_rx_t adc_value = plc_adc_read_sample(plc_adc);
@@ -139,13 +148,13 @@ void test_afe_dac_adc_by_steps(void)
 {
 	puts("Testing DAC + ADC with increasing step values with internal AFE routing\n"
 			"Press a key to cancel...");
-	struct plc_adc *plc_adc = plc_adc_create(PLC_DRIVERS);
+	struct plc_adc *plc_adc = plc_adc_create(plc_rx_device);
 	plc_afe_activate_blocks(plc_afe, afe_block_dac | afe_block_tx | afe_block_ref2);
 	plc_afe_set_calibration_mode(plc_afe, afe_calibration_dac_txpga);
 	plc_afe_set_dac_mode(plc_afe, 1);
 	int dac_value = 0;
 	int abort_test = 0;
-	for (; (dac_value < DAC_RANGE) && !abort_test; dac_value += 250)
+	for (; (dac_value < AFE_DAC_MAX_RANGE) && !abort_test; dac_value += 250)
 	{
 		printf("DAC value = %d\n", dac_value);
 		plc_afe_transfer_dac_sample(plc_afe, dac_value);
@@ -164,8 +173,8 @@ void prepare_next_samples_f05_callback(void *handle, uint16_t *buffer, uint32_t 
 
 void prepare_next_samples_f025_callback(void *handle, sample_tx_t *buffer, uint32_t buffer_count)
 {
-	const sample_tx_t pattern[] =
-	{ DAC_WAVE_MEAN_VALUE, DAC_WAVE_MAX_VALUE, DAC_WAVE_MEAN_VALUE, DAC_WAVE_MIN_VALUE };
+	const sample_tx_t pattern[] = {
+		DAC_WAVE_MEAN_VALUE, DAC_WAVE_MAX_VALUE, DAC_WAVE_MEAN_VALUE, DAC_WAVE_MIN_VALUE };
 	int pattern_index = 0;
 	for (; buffer_count > 0; buffer_count--, buffer++)
 	{
@@ -183,22 +192,20 @@ void tx_on_buffer_sent_callback(void *handle, sample_tx_t *buffer, uint32_t buff
 	fflush(stdout);
 }
 
-void test_afe_dac(void (*prepare_next_samples_callback) (void *, sample_tx_t *, uint32_t))
+void test_afe_dac(void (*prepare_next_samples_callback)(void *, sample_tx_t *, uint32_t))
 {
 	static const int INTERVAL_MS = 5000;
 	puts("Generating TX output\nPress a key to cancel...");
-	static const uint32_t tx_freq_bps = 750000;
-	static const uint32_t tx_samples_delay_us = 0;
-	plc_afe_configure_spi(plc_afe, tx_freq_bps, tx_samples_delay_us);
 	plc_afe_set_standy(plc_afe, 0);
 	plc_afe_activate_blocks(plc_afe, afe_block_dac | afe_block_tx | afe_block_ref2);
 	plc_afe_set_calibration_mode(plc_afe, afe_calibration_none);
 	plc_afe_set_dac_mode(plc_afe, 1);
-	struct plc_tx *plc_tx = plc_tx_create(prepare_next_samples_callback, NULL,
-			tx_on_buffer_sent_callback, NULL, spi_tx_mode_ping_pong_dma, 1024, plc_afe);
+	struct plc_tx *plc_tx = plc_tx_create(plc_tx_device, prepare_next_samples_callback,
+			NULL, tx_on_buffer_sent_callback, NULL, spi_tx_mode_ping_pong_dma, freq_dac_sps, 1024, plc_afe);
 	if (plc_tx == NULL)
 		return;
-	plc_tx_start_transmission(plc_tx);
+	int err = plc_tx_start_transmission(plc_tx);
+	assert(err == 0);
 	uint32_t stamp_ini_ms = plc_time_get_tick_ms();
 	while ((plc_time_get_tick_ms() - stamp_ini_ms < INTERVAL_MS)
 			&& !plc_terminal_io_kbhit(plc_terminal_io))
@@ -219,8 +226,8 @@ struct rx_callback_data
 	volatile int adc_data_rx_completed;
 };
 
-void rx_buffer_completed_callback(
-		void *data, sample_rx_t *samples_buffer, uint32_t samples_buffer_count)
+void rx_buffer_completed_callback(void *data, sample_rx_t *samples_buffer,
+		uint32_t samples_buffer_count)
 {
 	putc('+', stdout);
 	// NOTE: 'fflush' required to have live progress information
@@ -228,38 +235,37 @@ void rx_buffer_completed_callback(
 	fflush(stdout);
 
 	struct rx_callback_data *rx_callback_data = data;
-	memcpy(rx_callback_data->buffer_for_data, samples_buffer, 
-			samples_buffer_count*sizeof(sample_rx_t));
+	memcpy(rx_callback_data->buffer_for_data, samples_buffer,
+			samples_buffer_count * sizeof(sample_rx_t));
 
 	rx_callback_data->adc_data_rx_completed = 1;
 }
 
 void test_afe_dac_adc_by_file(
-		void (*prepare_next_samples_callback) (void *, sample_tx_t *, uint32_t))
+		void (*prepare_next_samples_callback)(void *, sample_tx_t *, uint32_t))
 {
 	puts("Testing DAC + ADC loop to file");
-	static const uint32_t tx_freq_bps = 750000;
-	static const uint32_t tx_samples_delay_us = 0;
-	plc_afe_configure_spi(plc_afe, tx_freq_bps, tx_samples_delay_us);
 	plc_afe_set_standy(plc_afe, 0);
 	plc_afe_activate_blocks(plc_afe, afe_block_dac | afe_block_tx | afe_block_ref2);
 	plc_afe_set_calibration_mode(plc_afe, afe_calibration_dac_txpga);
 	plc_afe_set_dac_mode(plc_afe, 1);
 	// Configure TX
-	struct plc_tx *plc_tx = plc_tx_create(prepare_next_samples_callback, NULL,
-			tx_on_buffer_sent_callback, NULL, spi_tx_mode_ping_pong_dma, TX_BUFFER_LEN, plc_afe);
+	struct plc_tx *plc_tx = plc_tx_create(plc_tx_device, prepare_next_samples_callback,
+	NULL, tx_on_buffer_sent_callback, NULL, spi_tx_mode_ping_pong_dma, freq_dac_sps, TX_BUFFER_LEN, plc_afe);
 	if (plc_tx == NULL)
 		return;
 	// Configure ADC
-	struct plc_adc *plc_adc = plc_adc_create(PLC_DRIVERS);
+	struct plc_adc *plc_adc = plc_adc_create(plc_rx_device);
 	struct rx_callback_data rx_callback_data;
-	rx_callback_data.buffer_for_data = malloc(RX_BUFFER_LEN*sizeof(sample_rx_t));
+	rx_callback_data.buffer_for_data = malloc(RX_BUFFER_LEN * sizeof(sample_rx_t));
 	rx_callback_data.adc_data_rx_completed = 0;
 	plc_adc_set_rx_buffer_completed_callback(plc_adc, rx_buffer_completed_callback,
 			&rx_callback_data);
 	// Start TX-RX process
-	plc_tx_start_transmission(plc_tx);
-	plc_adc_start_capture(plc_adc, RX_BUFFER_LEN, 1);
+	int err = plc_tx_start_transmission(plc_tx);
+	assert(err == 0);
+	err = plc_adc_start_capture(plc_adc, RX_BUFFER_LEN, 1, freq_adc_sps);
+	assert(err == 0);
 	while (!rx_callback_data.adc_data_rx_completed && !plc_terminal_io_kbhit(plc_terminal_io))
 		usleep(100000);
 	// Stop TX-RX process
@@ -292,11 +298,24 @@ int main(void)
 	// Initiate the PlcCape
 	plc_cape = plc_cape_create(PLC_DRIVERS);
 	plc_afe = plc_cape_get_afe(plc_cape);
+	if (plc_cape_in_emulation(plc_cape))
+	{
+		plc_tx_device = plc_tx_device_alsa;
+		freq_dac_sps = FREQ_DAC_ALSA_SPS;
+		plc_rx_device = plc_rx_device_alsa;
+		freq_adc_sps = FREQ_ADC_ALSA_SPS;
+	}
+	else
+	{
+		plc_tx_device = plc_tx_device_plc_cape;
+		freq_dac_sps = FREQ_DAC_BBB_SPS;
+		plc_rx_device = plc_rx_device_adc_bbb;
+		freq_adc_sps = FREQ_ADC_BBB_SPS;
+	}
 	// Menu loop
 	while (1)
 	{
-		puts(
-				"=================\n"
+		puts("=================\n"
 				"== SELECT TEST ==\n"
 				"=================\n"
 				"1. AFE LEDs\n"

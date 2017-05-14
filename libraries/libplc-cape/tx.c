@@ -2,11 +2,12 @@
  * @file
  * 
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
+#define _GNU_SOURCE		// Required for proper declaration of 'pthread_timedjoin_np'
 #include <errno.h>
 #include <pthread.h>
 #include <signal.h>
@@ -21,17 +22,20 @@
 #include "spi.h"
 #include "tx_sched.h"
 
-ATTR_EXTERN const char *spi_tx_mode_enum_text[spi_tx_mode_COUNT] =
-{ "none", "sample_by_sample", "buffer_by_buffer", "ping_pong_thread", "ping_pong_dma", };
+ATTR_EXTERN const char *spi_tx_mode_enum_text[spi_tx_mode_COUNT] = {
+	"none", "sample_by_sample", "buffer_by_buffer", "ping_pong_thread", "ping_pong_dma", };
+
+extern int plc_cape_emulation;
 
 struct plc_tx
 {
+	struct plc_tx_sched_api api;
+	plc_tx_sched_h handle;
 	struct spi *spi;
 	tx_fill_cycle_callback_t tx_fill_cycle_callback;
 	tx_fill_cycle_callback_h tx_fill_cycle_callback_handle;
 	tx_on_buffer_sent_callback_t tx_on_buffer_sent_callback;
 	tx_on_buffer_sent_callback_h tx_on_buffer_sent_callback_handle;
-	struct tx_sched *tx_sched;
 	uint32_t tx_sched_buffers_len;
 	pthread_t thread;
 	volatile int end_thread;
@@ -83,21 +87,24 @@ void report_tx_statistics(struct tx_statistics *tx_stat, uint32_t buffers_overfl
 // TODO: Refactor
 void *thread_spi_tx_buffer(void *arg)
 {
-	// Boost 'self' thread
-	// This is necessary because if in normal scheduling the thread can be interrupted easily
-	// by other threads leading to missed filled buffers and incorrect output
-	// For example, with a 'tx_sched_fill_buffer' taking 4ms (time for filling 1000 tx_sched with
-	//	'sin' and 'float') this function is frequently interrupted leading to 'tx_sched_fill_buffer'
-	//	lapses > 20ms which is over the time cycle of 750000 DAC bauds: tcycle = 1000*11/750000
-	//	= 14.6ms
-	struct sched_param param;
-	// param.sched_priority = sched_get_priority_max(policy);
-	param.sched_priority = 2;
-	// Two realtime schedulers can be used:
-	// * SCHED_RR: for round-robbin in threads with same priority
-	// * SCHED_FIFO: active thread only is interrupted by higher priority ones
-	int ret = sched_setscheduler(0, SCHED_RR, &param);
-	assert(ret == 0);
+	if (!plc_cape_emulation)
+	{
+		// Boost 'self' thread
+		// This is necessary because if in normal scheduling the thread can be interrupted easily
+		// by other threads leading to missed filled buffers and incorrect output
+		// For example, with a 'tx_sched_fill_buffer' taking 4ms (time for filling 1000 tx_sched
+		//	with 'sin' and 'float') this function is frequently interrupted leading to
+		//	'tx_sched_fill_buffer' lapses > 20ms which is over the time cycle of 750000 DAC bauds:
+		//		tcycle = 1000*11/750000	= 14.6ms
+		struct sched_param param;
+		// param.sched_priority = sched_get_priority_max(policy);
+		param.sched_priority = 2;
+		// Two realtime schedulers can be used:
+		// * SCHED_RR: for round-robbin in threads with same priority
+		// * SCHED_FIFO: active thread only is interrupted by higher priority ones
+		int ret = sched_setscheduler(0, SCHED_RR, &param);
+		assert(ret == 0);
+	}
 
 	struct plc_tx *plc_tx = arg;
 	// TODO: Do counter operations atomically
@@ -107,10 +114,10 @@ void *thread_spi_tx_buffer(void *arg)
 	while (!plc_tx->end_thread)
 	{
 		struct timespec stamp_ini = plc_time_get_hires_stamp();
-		plc_tx->tx_sched->tx_sched_fill_next_buffer(plc_tx->tx_sched);
+		plc_tx->api.tx_sched_fill_next_buffer(plc_tx->handle);
 		uint32_t buffer_preparation_us = plc_time_hires_interval_to_usec(stamp_ini,
 				plc_time_get_hires_stamp());
-		plc_tx->tx_sched->tx_sched_flush_and_wait_buffer(plc_tx->tx_sched);
+		plc_tx->api.tx_sched_flush_and_wait_buffer(plc_tx->handle);
 		struct timespec stamp_cycle_new = plc_time_get_hires_stamp();
 		// NOTE: 
 		// Expected buffer cycle = plc_tx->tx_sched_buffers_len*11bits/sample/bauds
@@ -118,8 +125,8 @@ void *thread_spi_tx_buffer(void *arg)
 		uint32_t buffer_cycle_us = plc_time_hires_interval_to_usec(stamp_cycle, stamp_cycle_new);
 		stamp_cycle = stamp_cycle_new;
 		// Monitor buffer in progress
-		uint16_t *samples_buffer_to_tx = plc_tx->tx_sched->tx_sched_get_address_buffer_in_tx(
-				plc_tx->tx_sched);
+		uint16_t *samples_buffer_to_tx = plc_tx->api.tx_sched_get_address_buffer_in_tx(
+				plc_tx->handle);
 		plc_tx->tx_on_buffer_sent_callback(plc_tx->tx_on_buffer_sent_callback_handle,
 				samples_buffer_to_tx, plc_tx->tx_sched_buffers_len);
 		report_tx_statistics(&plc_tx->tx_statistics, ping_pong_buffers_missed,
@@ -128,11 +135,13 @@ void *thread_spi_tx_buffer(void *arg)
 	return NULL;
 }
 
-ATTR_EXTERN struct plc_tx *plc_tx_create(tx_fill_cycle_callback_t tx_fill_cycle_callback,
+ATTR_EXTERN struct plc_tx *plc_tx_create(enum plc_tx_device_enum tx_device,
+		tx_fill_cycle_callback_t tx_fill_cycle_callback,
 		tx_fill_cycle_callback_h tx_fill_cycle_callback_handle,
 		tx_on_buffer_sent_callback_t tx_on_buffer_sent_callback,
 		tx_on_buffer_sent_callback_h tx_on_buffer_sent_callback_handle,
-		enum spi_tx_mode_enum tx_mode, uint32_t tx_buffers_len, struct plc_afe *plc_afe)
+		enum spi_tx_mode_enum tx_mode, float requested_sampling_rate_sps, uint32_t tx_buffers_len,
+		struct plc_afe *plc_afe)
 {
 	struct plc_tx *plc_tx = calloc(1, sizeof(struct plc_tx));
 	plc_tx->tx_fill_cycle_callback = tx_fill_cycle_callback;
@@ -151,28 +160,46 @@ ATTR_EXTERN struct plc_tx *plc_tx_create(tx_fill_cycle_callback_t tx_fill_cycle_
 			return NULL;
 		}
 	}
-	switch (tx_mode)
+	switch (tx_device)
 	{
-	case spi_tx_mode_sample_by_sample:
-		plc_tx->tx_sched = tx_sched_sync_create(tx_fill_cycle_callback,
-				tx_fill_cycle_callback_handle, plc_tx->spi, plc_tx->tx_sched_buffers_len, 1);
+	case plc_tx_device_plc_cape:
+	case plc_tx_device_plc_cape_std_drivers:
+		switch (tx_mode)
+		{
+		case spi_tx_mode_sample_by_sample:
+			plc_tx->handle = tx_sched_sync_create(&plc_tx->api, tx_fill_cycle_callback,
+					tx_fill_cycle_callback_handle, plc_tx->spi, plc_tx->tx_sched_buffers_len, 1);
+			break;
+		case spi_tx_mode_buffer_by_buffer:
+			plc_tx->handle = tx_sched_sync_create(&plc_tx->api, tx_fill_cycle_callback,
+					tx_fill_cycle_callback_handle, plc_tx->spi, plc_tx->tx_sched_buffers_len, 0);
+			break;
+		case spi_tx_mode_ping_pong_thread:
+			plc_tx->handle = tx_sched_async_thread_create(&plc_tx->api, tx_fill_cycle_callback,
+					tx_fill_cycle_callback_handle, plc_tx->spi, plc_tx->tx_sched_buffers_len);
+			break;
+		case spi_tx_mode_ping_pong_dma:
+			plc_tx->handle = tx_sched_async_dma_create(&plc_tx->api, tx_fill_cycle_callback,
+					tx_fill_cycle_callback_handle, plc_tx->spi, plc_tx->tx_sched_buffers_len);
+			break;
+		default:
+			assert(0);
+			break;
+		}
+		spi_configure_sps(plc_tx->spi, requested_sampling_rate_sps);
 		break;
-	case spi_tx_mode_buffer_by_buffer:
-		plc_tx->tx_sched = tx_sched_sync_create(tx_fill_cycle_callback,
-				tx_fill_cycle_callback_handle, plc_tx->spi, plc_tx->tx_sched_buffers_len, 0);
+	case plc_tx_device_internal_fifo:
+		plc_tx->handle = tx_sched_fifo_create(&plc_tx->api, tx_fill_cycle_callback,
+				tx_fill_cycle_callback_handle, plc_tx->tx_sched_buffers_len,
+				requested_sampling_rate_sps);
 		break;
-	case spi_tx_mode_ping_pong_thread:
-		plc_tx->tx_sched = tx_sched_async_thread_create(tx_fill_cycle_callback,
-				tx_fill_cycle_callback_handle, plc_tx->spi, plc_tx->tx_sched_buffers_len);
-		break;
-	case spi_tx_mode_ping_pong_dma:
-		plc_tx->tx_sched = tx_sched_async_dma_create(tx_fill_cycle_callback,
-				tx_fill_cycle_callback_handle, plc_tx->spi, plc_tx->tx_sched_buffers_len);
-		break;
-	default:
-		assert(0);
+	case plc_tx_device_alsa:
+		plc_tx->handle = tx_sched_alsa_create(&plc_tx->api, tx_fill_cycle_callback,
+				tx_fill_cycle_callback_handle, plc_tx->tx_sched_buffers_len,
+				requested_sampling_rate_sps);
 		break;
 	}
+
 	return plc_tx;
 }
 
@@ -180,14 +207,19 @@ ATTR_EXTERN void plc_tx_release(struct plc_tx *plc_tx)
 {
 	__sighandler_t sig_res = signal(PLC_SIGNUM_APP_WARNING, SIG_DFL);
 	assert(sig_res != SIG_ERR);
-	if (plc_tx->tx_sched)
-		plc_tx->tx_sched->tx_sched_release(plc_tx->tx_sched);
+	if (plc_tx->handle)
+		plc_tx->api.tx_sched_release(plc_tx->handle);
 	free(plc_tx);
+}
+
+ATTR_EXTERN float plc_tx_get_effective_sampling_rate(struct plc_tx *plc_tx)
+{
+	return plc_tx->api.tx_sched_get_effective_sampling_rate(plc_tx->handle);
 }
 
 // POSTCONDITION: 'rx_statistics' items must be atomic but it's not required for the whole struct
 //	(for performance and simplicity)
-ATTR_EXTERN const struct tx_statistics *tx_get_tx_statistics(struct plc_tx *plc_tx)
+ATTR_EXTERN const struct tx_statistics *plc_tx_get_tx_statistics(struct plc_tx *plc_tx)
 {
 	return &plc_tx->tx_statistics;
 }
@@ -198,11 +230,12 @@ ATTR_EXTERN void plc_tx_fill_buffer_iteration(struct plc_tx *plc_tx, uint16_t *b
 	plc_tx->tx_fill_cycle_callback(plc_tx->tx_fill_cycle_callback_handle, buffer, buffer_samples);
 }
 
-ATTR_EXTERN void plc_tx_start_transmission(struct plc_tx *plc_tx)
+ATTR_EXTERN int plc_tx_start_transmission(struct plc_tx *plc_tx)
 {
 	memset(&plc_tx->tx_statistics, 0, sizeof(plc_tx->tx_statistics));
-	plc_tx->tx_sched->tx_sched_start(plc_tx->tx_sched);
-	int ret;
+	int ret = plc_tx->api.tx_sched_start(plc_tx->handle);
+	if (ret < 0)
+		return ret;
 	// Boost the priority of the created thread
 	// However, with 'ps -eLF | grep plc' we see this doesn't seem to work (all threads is 'TS'
 	//	class)
@@ -229,6 +262,7 @@ ATTR_EXTERN void plc_tx_start_transmission(struct plc_tx *plc_tx)
 	plc_tx->end_thread = 0;
 	ret = pthread_create(&plc_tx->thread, NULL, thread_spi_tx_buffer, plc_tx);
 	assert(ret == 0);
+	return 0;
 }
 
 ATTR_EXTERN void plc_tx_stop_transmission(struct plc_tx *plc_tx)
@@ -236,7 +270,14 @@ ATTR_EXTERN void plc_tx_stop_transmission(struct plc_tx *plc_tx)
 	// Caution: 'plc_tx->end_thread' must be called before 'tx_sched_stop' to avoid
 	// the 'thread_spi_tx_buffer' real-time priority monopolize control
 	plc_tx->end_thread = 1;
-	plc_tx->tx_sched->tx_sched_stop(plc_tx->tx_sched);
-	int ret = pthread_join(plc_tx->thread, NULL);
+	plc_tx->api.tx_sched_request_stop(plc_tx->handle);
+	// Synchronous join
+	// int ret = pthread_join(plc_tx->thread, NULL);
+	struct timespec timeout;
+	int ret = clock_gettime(CLOCK_REALTIME, &timeout);
 	assert(ret == 0);
+	timeout.tv_sec += THREAD_TIMEOUT_SECONDS;
+	ret = pthread_timedjoin_np(plc_tx->thread, NULL, &timeout);
+	assert(ret == 0);
+	plc_tx->api.tx_sched_stop(plc_tx->handle);
 }

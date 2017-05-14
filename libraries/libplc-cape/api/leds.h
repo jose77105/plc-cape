@@ -3,13 +3,17 @@
  * @brief	LEDs control
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
 #ifndef LIBPLC_CAPE_LEDS_H
 #define LIBPLC_CAPE_LEDS_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct plc_leds;
 
@@ -39,5 +43,9 @@ void plc_leds_set_tx_activity(struct plc_leds *plc_leds, int on);
  * @param	on			0 to turn it off; 1 to turn it on
  */
 void plc_leds_set_rx_activity(struct plc_leds *plc_leds, int on);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LIBPLC_CAPE_LEDS_H */

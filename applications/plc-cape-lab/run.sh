@@ -9,4 +9,4 @@ fi
 # Change folder in the subshell to execute the testing app from the correct BIN folder
 cd $DEV_BIN_DIR/applications/plc-cape-lab
 
-./plc-cape-lab -P:2
+./plc-cape-lab -P:tx_2kHz

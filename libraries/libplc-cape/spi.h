@@ -3,7 +3,7 @@
  * @brief	SPI transmission management
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -16,6 +16,8 @@ struct plc_gpio;
 struct spi *spi_create(int plc_driver, struct plc_gpio *plc_gpio);
 void spi_release(struct spi *spi);
 void spi_configure(struct spi *spi, uint32_t spi_dac_freq, uint16_t spi_dac_delay);
+void spi_configure_sps(struct spi *spi, uint32_t sampling_rate_sps);
+float spi_get_sampling_rate_sps(struct spi *spi);
 char *spi_get_info(struct spi *spi);
 void spi_set_dac_mode(struct spi *spi, int enable);
 void spi_transfer_dac_buffer(struct spi *spi, uint16_t *samples_tx,

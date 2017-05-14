@@ -2,7 +2,7 @@
  * @file
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -11,6 +11,7 @@
 #include <menu.h>
 #include <ncurses.h>
 #include <panel.h>
+#include <pthread.h>		// pthread_mutex_t
 #include "+common/api/+base.h"
 #include "common.h"
 
@@ -23,6 +24,7 @@
 struct tui_menu
 {
 	struct tui_panel tui_panel;
+	pthread_mutex_t *lock;
 	void (*on_cancel)(ui_callbacks_h);
 	ui_callbacks_h callbacks_handle;
 	struct ui_menu_item *ui_items;
@@ -70,7 +72,11 @@ static void tui_menu_panel_process_key(struct tui_panel *tui_panel, int c)
 		ITEM *cur_menu_item = current_item(tui_menu->menu);
 		assert(cur_menu_item);
 		struct ui_menu_item *ui_menu_item = &tui_menu->ui_items[item_index(cur_menu_item)];
+		// TODO: Improve the locking strategy
+		// Release the lock temporarily to avoid deadlocks on callbacks
+		pthread_mutex_unlock(tui_menu->lock);
 		ui_menu_item->action(tui_menu->callbacks_handle, ui_menu_item->data);
+		pthread_mutex_lock(tui_menu->lock);
 		// Don't call 'wrefresh(tui_menu->window)'. If so, when opening a 'tui_dialog' the cursor
 		//	appears on 'tui_menu->window'
 		break;
@@ -94,7 +100,9 @@ static void tui_menu_panel_process_key(struct tui_panel *tui_panel, int c)
 		if (i < tui_menu->items_count)
 		{
 			struct ui_menu_item *ui_menu_item = &tui_menu->ui_items[i];
+			pthread_mutex_unlock(tui_menu->lock);
 			ui_menu_item->action(tui_menu->callbacks_handle, ui_menu_item->data);
+			pthread_mutex_lock(tui_menu->lock);
 		}
 		break;
 	}
@@ -126,7 +134,8 @@ void tui_menu_panel_release(struct tui_panel *tui_panel)
 // PRECONDITION: 'title' can be NULL
 ATTR_INTERN struct tui_menu *tui_menu_create(struct tui_panel *parent,
 		const struct ui_menu_item *menu_items, uint32_t menu_items_count,
-		const char *title, void (*on_cancel)(ui_callbacks_h), ui_callbacks_h callbacks_handle)
+		const char *title, void (*on_cancel)(ui_callbacks_h), ui_callbacks_h callbacks_handle,
+		pthread_mutex_t *lock)
 {
 	int ystart = 2;
 	static const char menu_marker[] = " > ";
@@ -136,8 +145,9 @@ ATTR_INTERN struct tui_menu *tui_menu_create(struct tui_panel *parent,
 	struct tui_menu *tui_menu = (struct tui_menu *) calloc(1, sizeof(struct tui_menu));
 	tui_menu->tui_panel.tui_panel_release = tui_menu_panel_release;
 	tui_menu->tui_panel.tui_panel_get_dimensions = tui_menu_panel_get_dimensions;
-	tui_menu->tui_panel.tui_panel_proces_key = tui_menu_panel_process_key;
+	tui_menu->tui_panel.tui_panel_process_key = tui_menu_panel_process_key;
 	tui_menu->tui_panel.parent = parent;
+	tui_menu->lock = lock;
 	// TODO: Improve cursos management
 	// Sets the pos of new menu automatically based on the parent selected position
 	int pos_x, pos_y;
@@ -204,6 +214,6 @@ ATTR_INTERN void tui_open_menu(struct tui *tui, const struct ui_menu_item *menu_
 		uint32_t menu_items_count, const char *title, void (*on_cancel)(ui_callbacks_h))
 {
 	struct tui_menu *tui_menu = tui_menu_create(tui_get_active_panel(tui), menu_items,
-			menu_items_count, title, on_cancel, tui_get_callbacks_handle(tui));
+			menu_items_count, title, on_cancel, tui_get_callbacks_handle(tui), tui_get_lock(tui));
 	tui_set_active_panel(tui, tui_menu_get_as_panel(tui_menu));
 }

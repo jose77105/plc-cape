@@ -24,37 +24,24 @@
  *		along with plc-cape project.  If not, see <http://www.gnu.org/licenses/>. 
  *
  * @copyright
- *	Copyright (C) 2016 Jose Maria Ortega
+ *	Copyright (C) 2016-2017 Jose Maria Ortega
  * 
  * @endcond
  */
 
-#include <ctype.h>		// tolower
 #include "+common/api/+base.h"
 #include "+common/api/logger.h"
 #include "libraries/libplc-tools/api/terminal_io.h"
-// Declare the custom type used as handle. Doing it like this avoids the 'void*' hard-casting
-#define PLUGINS_API_HANDLE_EXPLICIT_DEF
-typedef struct tui *ui_api_h;
-#include "plugins/ui/api/ui.h"
-
-// PRECONDITION: 'struct xui' must always be the first element in the struct to apply kind of 
-//	"polymorfism"
-struct tui_menu
-{
-	char *title;
-	void (*on_cancel)(ui_callbacks_h);
-	struct ui_menu_item *menu_items;
-	uint32_t menu_items_count;
-	struct tui_menu *parent_menu;
-};
+#include "tui_dialog.h"
+#include "tui_menu.h"
+#include "tui_panel.h"
 
 struct tui
 {
 	struct plc_terminal_io *plc_terminal_io;
 	ui_callbacks_h callbacks_handle;
 	int quit;
-	struct tui_menu *active_menu;
+	struct tui_panel *active_panel;
 };
 
 // Connection with the 'singletons_provider'
@@ -70,7 +57,7 @@ void log_line(const char *msg)
 	if (logger_api)
 		logger_api->log_line(logger_handle, msg);
 	else
-		fprintf(stderr, msg);
+		fprintf(stderr, "%s", msg);
 }
 
 int tui_init(int argc, char *argv[])
@@ -78,70 +65,36 @@ int tui_init(int argc, char *argv[])
 	return 1;
 }
 
-void tui_display_active_menu(struct tui *tui)
-{
-	static const char menu_separator[] = "*==================";
-	uint32_t i;
-	// 'puts' writes a trailing newline
-	puts(menu_separator);
-	if (tui->active_menu->title)
-	{
-		printf("** %s\n", tui->active_menu->title);
-		puts(menu_separator);
-	}
-	for (i = 0; i < tui->active_menu->menu_items_count; i++)
-		printf("| %s\n", tui->active_menu->menu_items[i].caption);
-	puts(menu_separator);
-}
-
 void tui_open_menu(struct tui *tui, const struct ui_menu_item *menu_items,
 		uint32_t menu_items_count, const char *title, void (*on_cancel)(ui_callbacks_h))
 {
-	struct tui_menu *parent_menu = tui->active_menu;
-	tui->active_menu = malloc(sizeof(*tui->active_menu));
-	tui->active_menu->parent_menu = parent_menu;
-	tui->active_menu->on_cancel = on_cancel;
-	tui->active_menu->title = (title) ? strdup(title) : NULL;
-	tui->active_menu->menu_items_count = menu_items_count;
-	tui->active_menu->menu_items = malloc(menu_items_count*sizeof(*tui->active_menu->menu_items));
-	uint32_t n;
-	for (n = 0; n < menu_items_count; n++)
-	{
-		tui->active_menu->menu_items[n] = menu_items[n];
-		tui->active_menu->menu_items[n].caption = strdup(menu_items[n].caption);
-	}
-	tui_display_active_menu(tui);
+	tui->active_panel = tui_menu_create(tui->active_panel, menu_items, menu_items_count, title,
+			on_cancel, tui->callbacks_handle);
+	tui->active_panel->display(tui->active_panel);
 }
 
 void tui_open_dialog(struct tui *tui, const struct ui_dialog_item *dialog_items,
 		uint32_t dialog_items_count, const char *title, void (*on_cancel)(ui_callbacks_h),
 		void (*on_ok)(ui_callbacks_h))
 {
+	tui->active_panel = tui_dialog_create(tui->active_panel, dialog_items, dialog_items_count,
+			title, on_cancel, on_ok, tui->callbacks_handle);
+	tui->active_panel->display(tui->active_panel);
 }
 
 struct tui *tui_create(const char *title, const struct ui_menu_item *main_menu_items,
 		uint32_t main_menu_items_count, ui_callbacks_h callbacks_handle)
 {
 	struct tui *tui = (struct tui*) calloc(1, sizeof(struct tui));
-	tui->plc_terminal_io = plc_terminal_io_create();;
+	tui->plc_terminal_io = plc_terminal_io_create();
 	tui->callbacks_handle = callbacks_handle;
 	tui_open_menu(tui, main_menu_items, main_menu_items_count,  "Main Menu", NULL);
 	return tui;
 }
 
-void tui_release_menu(struct tui_menu *menu)
-{
-	uint32_t n;
-	for (n = 0; n < menu->menu_items_count; n++)
-		free(menu->menu_items[n].caption);
-	free(menu->menu_items);
-	if (menu->title) free(menu->title);
-	free(menu);
-}
-
 void tui_release(struct tui *tui)
 {
-	tui_release_menu(tui->active_menu);
+	tui->active_panel->release(tui->active_panel);
 	plc_terminal_io_release(tui->plc_terminal_io);
 	free(tui);
 }
@@ -166,41 +119,17 @@ void tui_do_menu_loop(struct tui *tui)
 	tui->quit = 0;
 	while (!tui->quit)
 	{
-		// TODO: Use libplc-tools/terminal
-		// int c = getchar();
 		int c = plc_terminal_io_getchar(tui->plc_terminal_io);
-		switch (c)
-		{
-		case '\x1b':
-			if (tui->active_menu->parent_menu == NULL)
-				tui->quit = 1;
-			else if (tui->active_menu->on_cancel)
-				tui->active_menu->on_cancel(tui->callbacks_handle);
-			break;
-		default:
-		{
-			// Look for a keyboard shortcut
-			int i;
-			for (i = 0;
-					(i < tui->active_menu->menu_items_count)
-							&& (tolower(tui->active_menu->menu_items[i].shortcut) != tolower(c));
-									i++)
-				;
-			if (i < tui->active_menu->menu_items_count)
-			{
-				struct ui_menu_item *ui_menu_item = &tui->active_menu->menu_items[i];
-				ui_menu_item->action(tui->callbacks_handle, ui_menu_item->data);
-			}
-			break;
-		}
-		}
+		if ((c == KEY_CANCEL) && (tui->active_panel->parent == NULL))
+			tui->quit = 1;
+		else
+			tui->active_panel->process_key(tui->active_panel, c);
 	}
 	tui_log_text(tui, "Quitting...\n");
 }
 
 void tui_refresh(struct tui *tui)
 {
-	// TODO: Ignore it? It usually draw the last buffers received. Put in a callback
 }
 
 void tui_set_event(struct tui *tui, uint32_t id, uint32_t data)
@@ -222,10 +151,10 @@ void tui_set_event(struct tui *tui, uint32_t id, uint32_t data)
 
 void tui_active_panel_close(struct tui *tui)
 {
-	struct tui_menu *parent_menu = tui->active_menu->parent_menu;
-	tui_release_menu(tui->active_menu);
-	tui->active_menu = parent_menu;
-	tui_display_active_menu(tui);
+	struct tui_panel *parent = tui->active_panel->parent;
+	tui->active_panel->release(tui->active_panel);
+	tui->active_panel = parent;
+	tui->active_panel->display(tui->active_panel);
 }
 
 void tui_set_info(struct tui *tui, enum ui_info_enum info_type, const void *info_data)

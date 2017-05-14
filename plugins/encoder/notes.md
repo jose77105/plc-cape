@@ -20,6 +20,14 @@ Encoders {#plugins-encoder}
 	<td><b>@subpage plugin-encoder-ook</b>
 	<td>@link ./plugins/encoder/encoder-ook @endlink
 	<td>@copybrief plugin-encoder-ook
+<tr>
+	<td><b>@subpage plugin-encoder-morse</b>
+	<td>@link ./plugins/encoder/encoder-morse @endlink
+	<td>@copybrief plugin-encoder-morse
+<tr>
+	<td><b>@subpage plugin-encoder-wav</b>
+	<td>@link ./plugins/encoder/encoder-wav @endlink
+	<td>@copybrief plugin-encoder-wav
 </table>
 
 ## DETAILS

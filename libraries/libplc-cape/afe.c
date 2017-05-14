@@ -2,7 +2,7 @@
  * @file
  * 
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -12,6 +12,7 @@
 #include "+common/api/+base.h"
 #include "+common/api/bbb.h"
 #include "afe.h"
+#include "afe_commands.h"
 #include "api/afe.h"
 #include "error.h"
 #include "libraries/libplc-gpio/api/gpio.h"
@@ -28,61 +29,6 @@
 // by default for audio. Reconfiguration would be required for proper use
 #define GPIO_ERROR_FLAG_NUMBER_V1 GPIO_P9_28_NUMBER
 #define GPIO_ERROR_FLAG_NUMBER_V2 GPIO_P9_23_NUMBER
-
-// AFE Registers
-#define AFEREG_ENABLE1 0x1
-#define AFEREG_ENABLE2 0x3
-#define AFEREG_GAIN_SELECT 0x2
-#define AFEREG_CONTROL1 0x4
-#define AFEREG_CONTROL2 0x5
-#define AFEREG_RESET 0x9
-#define AFEREG_REVISION 0xB
-#define AFEREG_REVISION_EXPECTED 0x2
-
-// AFEREG_ENABLE1
-#define AFEREG_ENABLE1_PA 0x1
-#define AFEREG_ENABLE1_TX 0x2
-#define AFEREG_ENABLE1_RX 0x4
-#define AFEREG_ENABLE1_DAC 0x20
-
-// AFEREG_ENABLE2
-#define AFEREG_ENABLE2_ZERO_CROSSING 0x1
-// REF1 provides a PA_VS/2 voltage used for the PA
-#define AFEREG_ENABLE2_REF1 0x2
-// REF2 provides an AVDD/2 voltage used for the Tx PGA, TxFilter, Rx PGA1, Rx Filter, and Rx PGA2
-#define AFEREG_ENABLE2_REF2 0x4
-#define AFEREG_ENABLE2_PA_OUT 0x8
-
-// AFEREG_CONTROL1
-#define AFEREG_CONTROL1_CALIB_MASK 0x7
-#define AFEREG_CONTROL1_CALIB_TX 0x1
-#define AFEREG_CONTROL1_CALIB_RX 0x2
-#define AFEREG_CONTROL1_CALIB_TX_PGA 0x4
-#define AFEREG_CONTROL1_CA_CBCD 0x8
-
-// AFEREG_CONTROL2
-#define AFEREG_CONTROL2_THERMAL_OVERLOAD 0x20
-#define AFEREG_CONTROL2_CURRENT_OVERLOAD 0x40
-#define AFEREG_CONTROL2_ENABLE_OVERLOADS_AND 0x7F
-#define AFEREG_CONTROL2_ENABLE_OVERLOADS_OR \
-		(AFEREG_CONTROL2_CURRENT_OVERLOAD | AFEREG_CONTROL2_THERMAL_OVERLOAD)
-
-// AFEREG_GAIN_SELECT
-#define AFEREG_GAIN_SELECT_RX_PGA1_MASK 0x3
-const uint8_t AFEREG_GAIN_SELECT_RX_PGA1[] =
-{ 0x0, 0x1, 0x2, 0x3 };
-
-#define AFEREG_GAIN_SELECT_RX_PGA2_MASK 0xC
-const uint8_t AFEREG_GAIN_SELECT_RX_PGA2[] =
-{ 0x0, 0x4, 0x8, 0xC };
-
-#define AFEREG_GAIN_SELECT_TX_PGA_MASK 0x30
-const uint8_t AFEREG_GAIN_SELECT_TX_PGA[] =
-{ 0x00, 0x10, 0x20, 0x30 };
-
-// AFEREG_RESET
-#define AFEREG_RESET_SOFTRESET 0x14
-#define AFEREG_RESET_CLEAR_OVERLOADS_MASK 0x9F
 
 struct plc_afe
 {
@@ -101,6 +47,18 @@ struct plc_afe
 	enum afe_block_enum blocks_enabled;
 	enum afe_calibration_enum calibration_mode;
 };
+
+ATTR_EXTERN const char *afe_gain_tx_pga_enum_text[afe_gain_tx_pga_COUNT] = { "0.25", "0.50",
+		"0.71", "1.00" };
+
+ATTR_EXTERN const char *afe_gain_rx_pga1_enum_text[afe_gain_rx_pga1_COUNT] = { "0.25", "0.50",
+		"1.00", "2.00" };
+
+ATTR_EXTERN const char *afe_gain_rx_pga2_enum_text[afe_gain_rx_pga2_COUNT] = { "1", "4",
+		"16", "64" };
+
+ATTR_EXTERN const char *afe_calibration_enum_text[afe_calibration_COUNT] = { "none",
+		"dac_txpga_txfilter", "dac_txpga_rxpga1_rxfilter_rxpga2", "dac_txpga" };
 
 void afe_set_reg_value(struct plc_afe *plc_afe, uint8_t reg, uint8_t content)
 {
@@ -262,6 +220,8 @@ ATTR_EXTERN char *plc_afe_get_info(struct plc_afe *plc_afe)
 	case afe_calibration_dac_txpga:
 		strcpy(calibration_text, "TX_PGA_CAL");
 		break;
+	default:
+		assert(0);
 	}
 	// Compose info
 	asprintf(&info, "Revision: %d\n"
@@ -366,7 +326,7 @@ ATTR_EXTERN void plc_afe_activate_blocks(struct plc_afe *plc_afe, enum afe_block
 	//	En este modo el DAC abarca todo el rango pero en sentido negativo:
 	//		plc_afe_transfer_dac_sample(plc_afe, 0): 0,5V
 	//		plc_afe_transfer_dac_sample(plc_afe, 100): 0,45V
-	//		plc_afe_transfer_dac_sample(plc_afe, DAC_RANGE-100): 0,05V
+	//		plc_afe_transfer_dac_sample(plc_afe, AFE_DAC_MAX_RANGE-100): 0,05V
 	//		plc_afe_transfer_dac_sample(plc_afe, 0): 0,05V
 	//
 	//	Si además del 'afe_block_dac' se activa el 'afe_block_tx' entonces actúa el TX_PGA que tiene
@@ -407,6 +367,8 @@ ATTR_EXTERN void plc_afe_set_calibration_mode(struct plc_afe *plc_afe,
 		// TX_PGA_OUT -> RX_PGA2_OUT (BBB.ADC)
 		reg = AFEREG_CONTROL1_CALIB_TX_PGA;
 		break;
+	default:
+		assert(0);
 	}
 	afe_reg_set_mask(plc_afe, AFEREG_CONTROL1, AFEREG_CONTROL1_CALIB_MASK, reg);
 	plc_afe->calibration_mode = calibration_mode;
@@ -432,8 +394,6 @@ ATTR_EXTERN void plc_afe_set_gains_rx(struct plc_afe *plc_afe, enum afe_gain_rx_
 
 ATTR_EXTERN void plc_afe_disable_all(struct plc_afe *plc_afe)
 {
-	// Disable Calibration modes
-	afe_reg_set_mask(plc_afe, AFEREG_CONTROL1, AFEREG_CONTROL1_CALIB_MASK, 0);
 	// Disable all blocks (DAC, TX, ZC, REFs, PA_OUT...)
 	plc_afe_activate_blocks(plc_afe, 0);
 }
@@ -450,10 +410,10 @@ ATTR_EXTERN uint8_t plc_afe_get_overloads(struct plc_afe *plc_afe)
 	return spi_read_command(plc_afe->spi, AFEREG_RESET);
 }
 
-ATTR_EXTERN void plc_afe_configure_spi(struct plc_afe *plc_afe, uint32_t spi_dac_freq,
-		uint16_t spi_dac_delay)
+ATTR_EXTERN void plc_afe_configure_spi(struct plc_afe *plc_afe, uint32_t spi_freq,
+		uint16_t spi_delay)
 {
-	spi_configure(plc_afe->spi, spi_dac_freq, spi_dac_delay);
+	spi_configure(plc_afe->spi, spi_freq, spi_delay);
 }
 
 ATTR_EXTERN void plc_afe_set_dac_mode(struct plc_afe *plc_afe, int enable)

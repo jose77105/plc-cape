@@ -17,11 +17,11 @@ Set objWMI = GetObject("winmgmts:\\" & strComputer & "\root\cimv2")
 Set objShare = objWMI.Get("Win32_Share")
 
 intRC = CreateSharedResource("plc-cape-src", "J:\dev\src\beaglebone\plc-cape")
-intRC = intRC Or CreateSharedResource("plc-cape-bin", "K:\dev\bin\beaglebone\plc-cape-bbb")
+intRC = intRC Or CreateSharedResource("plc-cape-bin-bbb", "K:\dev\bin\beaglebone\plc-cape-bbb")
 if intRC = 0 Then
 	Dim WshNetwork
 	Set WshNetwork = WScript.CreateObject("WScript.Network")
 	WshNetwork.MapNetworkDrive "X:", "\\127.0.0.1\plc-cape-src", false
-	WshNetwork.MapNetworkDrive "Y:", "\\127.0.0.1\plc-cape-bin", false
+	WshNetwork.MapNetworkDrive "Y:", "\\127.0.0.1\plc-cape-bin-bbb", false
 	WScript.Echo "Shared resources created"
 End If

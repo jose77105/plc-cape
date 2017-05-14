@@ -3,13 +3,20 @@
  * @brief	AFE031 management
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
 #ifndef LIBPLC_CAPE_AFE_H
 #define LIBPLC_CAPE_AFE_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define AFE_DAC_BITS 10
+#define AFE_DAC_MAX_RANGE (1 << AFE_DAC_BITS)
 
 /**
  * @brief	Blocks within the AFE that can be selectively enabled or disabled
@@ -27,36 +34,44 @@ enum afe_block_enum
 	afe_block_zc = 0x80,
 };
 
+extern const char *afe_gain_tx_pga_enum_text[];
 enum afe_gain_tx_pga_enum
 {
 	afe_gain_tx_pga_025 = 0,
 	afe_gain_tx_pga_050,
 	afe_gain_tx_pga_071,
-	afe_gain_tx_pga_100
+	afe_gain_tx_pga_100,
+	afe_gain_tx_pga_COUNT
 };
 
+extern const char *afe_gain_rx_pga1_enum_text[];
 enum afe_gain_rx_pga1_enum
 {
 	afe_gain_rx_pga1_025 = 0,
 	afe_gain_rx_pga1_050,
 	afe_gain_rx_pga1_100,
-	afe_gain_rx_pga1_200
+	afe_gain_rx_pga1_200,
+	afe_gain_rx_pga1_COUNT
 };
 
+extern const char *afe_gain_rx_pga2_enum_text[];
 enum afe_gain_rx_pga2_enum
 {
 	afe_gain_rx_pga2_1 = 0,
 	afe_gain_rx_pga2_4,
 	afe_gain_rx_pga2_16,
-	afe_gain_rx_pga2_64
+	afe_gain_rx_pga2_64,
+	afe_gain_rx_pga2_COUNT
 };
 
+extern const char *afe_calibration_enum_text[];
 enum afe_calibration_enum
 {
 	afe_calibration_none = 0,
 	afe_calibration_dac_txpga_txfilter,
 	afe_calibration_dac_txpga_rxpga1_rxfilter_rxpga2,
 	afe_calibration_dac_txpga,
+	afe_calibration_COUNT
 };
 
 /**
@@ -148,10 +163,10 @@ uint8_t plc_afe_get_overloads(struct plc_afe *plc_afe);
 /**
  * @brief	Configures the SPI bus
  * @param	plc_afe			Pointer to the handler object
- * @param	spi_dac_freq	Transmission rate of the SPI bus (in samples per second)
- * @param	spi_dac_delay	Delay between samples in microseconds
+ * @param	spi_freq		Transmission rate of the SPI bus (in bits per second)
+ * @param	spi_delay		Delay between samples in microseconds
  */
-void plc_afe_configure_spi(struct plc_afe *plc_afe, uint32_t spi_dac_freq, uint16_t spi_dac_delay);
+void plc_afe_configure_spi(struct plc_afe *plc_afe, uint32_t spi_freq, uint16_t spi_delay);
 /**
  * @brief	Switches between DAC mode and Commands mode
  * @param	plc_afe	Pointer to the handler object
@@ -164,5 +179,9 @@ void plc_afe_set_dac_mode(struct plc_afe *plc_afe, int enable);
  * @param	sample	DAC value
  */
 void plc_afe_transfer_dac_sample(struct plc_afe *plc_afe, uint16_t sample);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LIBPLC_CAPE_AFE_H */

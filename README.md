@@ -11,20 +11,31 @@ Full documentation about the software framework (and some electronics) is availa
 [PlcCapeSoftwareFramework.pdf](http://upcommons.upc.edu/bitstream/handle/2117/98244/PlcCapeSoftwareFramework.pdf)
 Documentation about the electronic framework is in progress
 
-## VERSION
 
-0.1
+## VERSIONS
+
+[Changelog](CHANGELOG.md)
+
 
 ## CURRENT STATUS OF THE DEVELOPMENT
 
-The software is in an early phase (hence the version 0.1).
+The software is in an early phase (hence the version 0.2).
 
 The framework is consistent and stable but the specific implementation of each component would
 still require considerable refactoring, bug fixing and improvements
 
-**Update 10-Apr-2017:**
 
-A version 0.2 with more appications, plugins, improvements and bug fixing is in progress
+## INSTALL
+
+* Download source code and decompress it on any local folder
+* Compile the source code depending on your needs:
+** To compile the whole framework just execute **make** from the root folder.
+** To compile the BBB custom drivers (for SPI-DAC and ADC) go to the drivers folder and execute
+**make**
+** To compile the framework for a specific configuration use the PROFILE option like:
+*** **make PROFILE=debug.bbb**
+*** **make PROFILE=release.bbb**
+
 
 ## LICENSE
 
@@ -44,6 +55,7 @@ A version 0.2 with more appications, plugins, improvements and bug fixing is in 
 </pre>
 For full terms see [LICENSE](LICENSE)
 
+
 ## COPYRIGHT
 
-Copyright (C) 2016 Jose Maria Ortega (<a href="mailto:jose77105@gmail.com">jose77105@gmail.com</a>)
+Copyright (C) 2016-2017 Jose Maria Ortega (<a href="mailto:jose77105@gmail.com">jose77105@gmail.com</a>)

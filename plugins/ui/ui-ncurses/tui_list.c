@@ -2,7 +2,7 @@
  * @file
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -115,7 +115,7 @@ struct tui_list *tui_list_create(struct tui_panel *parent, const char **text_ite
 	struct tui_list *tui_list = (struct tui_list*) calloc(1, sizeof(struct tui_list));
 	tui_list->tui_panel.tui_panel_release = tui_list_panel_release;
 	tui_list->tui_panel.tui_panel_get_dimensions = tui_list_panel_get_dimensions;
-	tui_list->tui_panel.tui_panel_proces_key = tui_list_panel_process_key;
+	tui_list->tui_panel.tui_panel_process_key = tui_list_panel_process_key;
 	tui_list->tui_panel.parent = parent;
 	tui_list->callbacks_handle = callbacks_handle;
 	tui_list->on_cancel = on_cancel;

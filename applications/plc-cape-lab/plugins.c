@@ -2,7 +2,7 @@
  * @file
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -28,7 +28,7 @@ void *load_dl_function(void *so_handle, const char *function_name, int mandatory
 	{
 		const char *error;
 		if ((error = dlerror()))
-		log_and_exit(error);
+		log_line_and_exit(error);
 		assert(fn);
 	}
 	return fn;
@@ -48,7 +48,7 @@ struct plugin *load_plugin(const char *path, void **api, uint32_t *api_version, 
 	struct plugin *plugin = calloc(1, sizeof(*plugin));
 	plugin->so_handle = dlopen(path, RTLD_LAZY);
 	if (!plugin->so_handle)
-		log_and_exit(dlerror());
+		log_line_and_exit(dlerror());
 	// Clear any existing error
 	dlerror();
 	try_set_singletons_provider(plugin->so_handle);
@@ -60,7 +60,7 @@ struct plugin *load_plugin(const char *path, void **api, uint32_t *api_version, 
 	void **fn_ptr = plugin->api;
 	for (; functions_count > 0; functions_count--, fn_ptr++)
 		if (*fn_ptr == NULL)
-			log_and_exit("Invalid plugin: some function of the interface is NULL");
+			log_line_and_exit("Invalid plugin: some function of the interface is NULL");
 	*api = plugin->api;
 	return plugin;
 }

@@ -8,8 +8,8 @@ PROJECT_BIN=plc-cape-bin
 export DEV_SRC_DIR=/mnt/${PROJECT_SRC}
 export DEV_BIN_DIR=/mnt/${PROJECT_BIN}
 
-mount 192.168.7.1:/media/x/dev/src/beaglebone/plc-cape ${DEV_SRC_DIR}
-mount 192.168.7.1:/media/y/dev/bin/beaglebone/plc-cape-bbb ${DEV_BIN_DIR}
+mount 192.168.7.1:/media/x ${DEV_SRC_DIR}
+mount 192.168.7.1:/media/y ${DEV_BIN_DIR}
 
 # Force the 'usb0' configuration to be loaded from /etc/network/interfaces in order to wake up
 # the Internet connection (if available) + NTP synchro

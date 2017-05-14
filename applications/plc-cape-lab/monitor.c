@@ -2,7 +2,7 @@
  * @file
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -89,12 +89,12 @@ static void *monitor_thread(void *arg)
 						monitor->buffer_rx_last_value);
 				break;
 			case monitor_profile_tx_values:
-				if ((monitor->plc_tx) && (tx_stat = tx_get_tx_statistics(monitor->plc_tx)))
+				if ((monitor->plc_tx) && (tx_stat = plc_tx_get_tx_statistics(monitor->plc_tx)))
 					asprintf(&text, "TX: Buffers overflow/handled: %u/%u",
 							tx_stat->buffers_overflow, tx_stat->buffers_handled);
 				break;
 			case monitor_profile_tx_time:
-				if ((monitor->plc_tx) && (tx_stat = tx_get_tx_statistics(monitor->plc_tx)))
+				if ((monitor->plc_tx) && (tx_stat = plc_tx_get_tx_statistics(monitor->plc_tx)))
 					asprintf(&text,
 							"TX timings [us] (min, cur, max): "
 							"Processing (%u,%u,%u), Cycle: (%u,%u,%u)",

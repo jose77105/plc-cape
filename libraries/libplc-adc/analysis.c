@@ -98,6 +98,10 @@ ATTR_EXTERN int plc_rx_analysis_analyze_buffer(struct plc_rx_analysis *plc_rx_an
 	// TODO: Make 'HI_THRESHOLD_DETECTION' this automatic or configurable? Improve the filter
 	//	anti-glitches
 	uint32_t samples_hi_threshold_detection = (uint32_t) (plc_rx_analysis->rx_samples_per_bit / 4);
+	if (samples_hi_threshold_detection > buffer_samples / 4)
+		samples_hi_threshold_detection = buffer_samples / 4;
+	sample_rx_t samples_hi_threshold = plc_rx_analysis->data_offset +
+			plc_rx_analysis->data_hi_threshold_detection;
 	int hi_samples = 0;
 	int data_detected = 0;
 	for (i = buffer_samples; i > 0; i--, buffer_cur++)
@@ -107,8 +111,7 @@ ATTR_EXTERN int plc_rx_analysis_analyze_buffer(struct plc_rx_analysis *plc_rx_an
 		if (*buffer_cur > max)
 			max = *buffer_cur;
 		accum += *buffer_cur;
-		if (*buffer_cur >
-				plc_rx_analysis->data_offset + plc_rx_analysis->data_hi_threshold_detection)
+		if (*buffer_cur > samples_hi_threshold)
 		{
 			if (++hi_samples == samples_hi_threshold_detection)
 			{

@@ -3,13 +3,17 @@
  * @brief	Helper functions for data transmission
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
 #ifndef LIBPLC_CAPE_TX_H
 #define LIBPLC_CAPE_TX_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 extern const char *spi_tx_mode_enum_text[];
 enum spi_tx_mode_enum
@@ -54,6 +58,8 @@ struct plc_tx;
 
 /** 
  * @brief	Creates an object for buffered chained transmission
+ * @param	tx_device
+ * 					Logical device used on transmission: plc-cape, ALSA, internal fifo memory...
  * @param	tx_fill_cycle_callback
  *					Function that will be called to prepare the next buffer of samples to be sent
  * @param	tx_fill_cycle_callback_handle
@@ -64,39 +70,60 @@ struct plc_tx;
  * @param	tx_on_buffer_sent_callback_handle
  *					Optional user value that will be sent as the first parameter of
  *					_tx_on_buffer_sent_callback_
- * @param	tx_mode	The transmission mode to be used. Someones are only available for the custom
+ * @param	tx_mode	The transmission mode to be used. Some ones are only available for the custom
  *					SPI driver
+ * @param	requested_sampling_rate_sps
+ * 					The wished sampling frequency
  * @param	tx_buffers_len
  *					The length of the buffer
  * @param	plc_afe	A pointer to the plc_afe handler object
  * @return	Pointer to the handler object
  */
-struct plc_tx *plc_tx_create(tx_fill_cycle_callback_t tx_fill_cycle_callback,
+struct plc_tx *plc_tx_create(enum plc_tx_device_enum tx_device,
+		tx_fill_cycle_callback_t tx_fill_cycle_callback,
 		tx_fill_cycle_callback_h tx_fill_cycle_callback_handle,
 		tx_on_buffer_sent_callback_t tx_on_buffer_sent_callback,
 		tx_on_buffer_sent_callback_h tx_on_buffer_sent_callback_handle,
-		enum spi_tx_mode_enum tx_mode, uint32_t tx_buffers_len, struct plc_afe *plc_afe);
-/**
- * @brief	Gets some statistics related with the transmission
- * @param	plc_tx	Pointer to the handler object
- * @return	A struct with the statistics data
- */
-const struct tx_statistics *tx_get_tx_statistics(struct plc_tx *plc_tx);
+		enum spi_tx_mode_enum tx_mode, float requested_sampling_rate_sps, uint32_t tx_buffers_len,
+		struct plc_afe *plc_afe);
 /**
  * @brief	Releases a handler object
  * @param	plc_tx	Pointer to the handler object
  */
 void plc_tx_release(struct plc_tx *plc_tx);
+/**
+ * @brief	Gets the effective sampling frequency accepted by the transmitter
+ * @param	plc_tx	Pointer to the handler object
+ * @return	The closest sampling frequency
+ */
+float plc_tx_get_effective_sampling_rate(struct plc_tx *plc_tx);
+/**
+ * @brief	Gets some statistics related with the transmission
+ * @param	plc_tx	Pointer to the handler object
+ * @return	A struct with the statistics data
+ */
+const struct tx_statistics *plc_tx_get_tx_statistics(struct plc_tx *plc_tx);
+/**
+ * @brief	Gets some statistics related with the transmission
+ * @param	plc_tx			Pointer to the handler object
+ * @param	buffer			Buffer to be sent in the next iteration
+ * @param	buffer_samples	Samples in the buffer
+ */
 void plc_tx_fill_buffer_iteration(struct plc_tx *plc_tx, uint16_t *buffer, uint32_t buffer_samples);
 /**
  * @brief	Starts the standalone transmission process
  * @param	plc_tx	Pointer to the handler object
+ * @return	0 if OK; < 0 if error
  */
-void plc_tx_start_transmission(struct plc_tx *plc_tx);
+int plc_tx_start_transmission(struct plc_tx *plc_tx);
 /**
  * @brief	Stops the transmission process
  * @param	plc_tx	Pointer to the handler object
  */
 void plc_tx_stop_transmission(struct plc_tx *plc_tx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LIBPLC_CAPE_TX_H */

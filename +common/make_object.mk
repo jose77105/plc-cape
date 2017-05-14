@@ -43,7 +43,14 @@ MAKEFILE_DIR = $(CURDIR)
 ifdef DEV_BIN_DIR
 ifdef DEV_SRC_DIR
 # Set build folder to '$(DEV_BLD_DIR)' using the tree structure of '$(DEV_SRC_DIR)'
-BUILD_DIR = $(subst $(DEV_SRC_DIR), $(DEV_BIN_DIR), $(MAKEFILE_DIR))
+# NOTE: If 'DEV_SRC_DIR' points to a symlink it needs to be resolved before the 'subst' because
+#	$(CURDIR) is always a symlink-resolved path
+DEV_SRC_DIR_SYMLINK_RESOLVED = $(shell readlink "$(DEV_SRC_DIR)")
+# If not a symbolic link 'readlink' returns nothing on stdout (and error: $? == 1)
+ifeq (x$(DEV_SRC_DIR_SYMLINK_RESOLVED), x)
+DEV_SRC_DIR_SYMLINK_RESOLVED = $(DEV_SRC_DIR)
+endif
+BUILD_DIR = $(subst $(DEV_SRC_DIR_SYMLINK_RESOLVED), $(DEV_BIN_DIR), $(MAKEFILE_DIR))
 else	# ifndef DEV_SRC_DIR
 $(error 'DEV_SRC_DIR' environment variable required)
 endif	# ifdef DEV_SRC_DIR
@@ -76,14 +83,21 @@ else ifeq ($(BUILD_TARGET_SUFFIX), .a)
 CFLAGS += -fwhole-program -fPIC
 endif
 
+ifeq ($(CC), g++)
+SRC_EXT = cpp
+else
+SRC_EXT = c
+endif
+
 # Additional cutom CFLAGS
 CFLAGS += $(ADDITIONAL_CFLAGS)
 
 # Consider dependent plc-cape libraries if defined
+# NOTE: Specify 'ADDITIONAL_PLC_LIBS' before 'ADDITIONAL_LIBS' for proper dependency resolution
 LIBS += \
-	$(ADDITIONAL_LIBS) \
 	$(foreach library,$(ADDITIONAL_PLC_LIBS), \
-			-L"$(DEV_BIN_DIR)/libraries/lib$(library)" -l$(library))
+			-L"$(DEV_BIN_DIR)/libraries/lib$(library)" -l$(library)) \
+	$(ADDITIONAL_LIBS)
 
 # Declare external header libraries to trigger the compiler when updated
 ADDITIONAL_DEPENDENCIES = \
@@ -96,7 +110,7 @@ HEADERS = \
 	$(foreach category,$(ADDITIONAL_PLC_PLUGIN_CATEGORIES), \
 			$(DEV_SRC_DIR)/plugins/$(category)/api/*.h)
 
-BUILD_OBJECTS = $(patsubst %.c, $(BUILD_DIR)/%.o, $(notdir $(wildcard $(SOURCE_PATH)*.c)))
+BUILD_OBJECTS = $(patsubst %.$(SRC_EXT), $(BUILD_DIR)/%.o, $(notdir $(wildcard $(SOURCE_PATH)*.$(SRC_EXT))))
 
 default: all
 
@@ -106,8 +120,8 @@ all: $(BUILD_TARGET)
 
 display-vars:
 	@echo ENVIRONMENT VARIABLES
-	@echo DEV_BIN_DIR: $(DEV_BIN_DIR)
 	@echo DEV_SRC_DIR: $(DEV_SRC_DIR)
+	@echo DEV_BIN_DIR: $(DEV_BIN_DIR)
 	@echo 
 	@echo EXTERNAL VARIABLES
 	@echo TARGET: $(TARGET)
@@ -120,6 +134,8 @@ display-vars:
 	@echo ADDITIONAL_HEADERS: $(ADDITIONAL_HEADERS)
 	@echo 
 	@echo INTERNAL VARIABLES
+	@echo MAKEFILE_DIR: $(MAKEFILE_DIR)
+	@echo DEV_SRC_DIR_SYMLINK_RESOLVED: $(DEV_SRC_DIR_SYMLINK_RESOLVED)
 	@echo BUILD_TARGET: $(BUILD_TARGET)
 	@echo CFLAGS: $(CFLAGS)
 	@echo BUILD_OBJECTS: $(BUILD_OBJECTS)
@@ -134,7 +150,7 @@ display-vars:
 # Also check for other explicit external dependencies as static libraries, api headers, etc.
 # Double-quotes are used on 'echo' to preserve the leading space
 
-$(BUILD_DIR)/%.o: $(SOURCE_PATH)%.c $(HEADERS)
+$(BUILD_DIR)/%.o: $(SOURCE_PATH)%.$(SRC_EXT) $(HEADERS)
 	@echo "   $@"
 	@$(CC) $(CFLAGS) -I"$(DEV_SRC_DIR)" -c $< -o $@
 

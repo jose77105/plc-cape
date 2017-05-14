@@ -3,13 +3,17 @@
  * @brief	Helper functions related to the management of applications
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
-#ifndef LIBPLC_TOOLS_SHELL_H
-#define LIBPLC_TOOLS_SHELL_H
+#ifndef LIBPLC_TOOLS_APPLICATION_H
+#define LIBPLC_TOOLS_APPLICATION_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @brief	Gets the absolute full path of the running application
@@ -27,4 +31,8 @@ char *plc_application_get_abs_dir(void);
  */
 char *plc_application_get_output_abs_dir(void);
 
-#endif /* LIBPLC_TOOLS_SHELL_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* LIBPLC_TOOLS_APPLICATION_H */

@@ -1,7 +1,7 @@
 /*
  * ADC MFD HighSpeed driver
  *
- * Copyright (C) 2016
+ * Copyright (C) 2016-2017
  *	Based on the standard driver "TI ADC MFD driver" provided by Texas Instruments Incorporated
  *
  * This program is free software; you can redistribute it and/or
@@ -13,6 +13,9 @@
  * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
+
+// One second contention between warnings to avoid CPU overflow and hanging
+#define WARNING_CONTENTION_US 1000000
 
 // [PLC] Enable debug messages with 'dev_dbg'
 // #define DEBUG 1
@@ -57,6 +60,8 @@ static const int continuous_transfer = 1;
 static int continuous_transfer_started = 0;
 static int abort_continuous_transfer = 0;
 static const int iio_std_exchange = 0;
+static u64 next_underflow_warning_stamp = 0;
+static u64 next_overrun_warning_stamp = 0;
 
 #define DMA_SAMPLES_COUNT (2048+FIFO1_THRESHOLD)
 
@@ -154,7 +159,11 @@ static irqreturn_t tiadc_irq(int irq, void *private)
 
 	/* FIFO Overrun. Clear flag. Disable/Enable ADC to recover */
 	if (status & IRQENB_FIFO1OVRRUN) {
-		printk(KERN_INFO "adc_hs_plc: FIFO1 Overrun!\n");
+		u64 stamp = jiffies;
+		if (stamp > next_overrun_warning_stamp) {
+			next_overrun_warning_stamp = stamp+usecs_to_jiffies(WARNING_CONTENTION_US);
+			printk(KERN_INFO "adc_hs_plc: FIFO1 Overrun!\n");
+		}
 		config = tiadc_readl(adc_dev, REG_CTRL);
 		config &= ~(CNTRLREG_TSCSSENB);
 		tiadc_writel(adc_dev, REG_CTRL, config);
@@ -174,7 +183,13 @@ static irqreturn_t tiadc_irq(int irq, void *private)
 			if (adc_dev->dma_samples_cur_write == adc_dev->dma_samples_end)
 				adc_dev->dma_samples_cur_write = adc_dev->dma_samples;
 			if (adc_dev->dma_samples_cur_write == adc_dev->dma_samples_cur_read)
-				printk(KERN_INFO "adc_hs_plc: Read Underflow!\n");
+			{
+				u64 stamp = jiffies;
+				if (stamp > next_underflow_warning_stamp) {
+					next_underflow_warning_stamp = stamp+usecs_to_jiffies(WARNING_CONTENTION_US);
+					printk(KERN_INFO "adc_hs_plc: Read underflow!\n");
+				}
+			}
 		}
 		tiadc_writel(adc_dev, REG_IRQSTATUS, IRQENB_FIFO1THRES);
 		// tiadc_writel(adc_dev, REG_IRQENABLE, IRQENB_FIFO1THRES);

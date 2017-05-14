@@ -3,13 +3,17 @@
  * @brief	Tracing helper functions
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
 #ifndef LIBPLC_TOOLS_TRACE_H
 #define LIBPLC_TOOLS_TRACE_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @brief	An implementation of a classical tracing method compatible with @ref plc_trace and
@@ -20,5 +24,9 @@
  *			traces can be sent to _stdout_
  */
 void plc_trace_default(const char *function_name, const char *format, ...);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LIBPLC_TOOLS_TRACE_H */

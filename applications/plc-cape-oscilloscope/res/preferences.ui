@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+	<!-- interface-requires gtk+ 3.8 -->
+	<object id="preferences_dialog" class="GtkDialog">
+		<property name="title" translatable="yes">Preferences</property>
+		<property name="resizable">False</property>
+		<property name="modal">False</property>
+		<child internal-child="vbox">
+			<object class="GtkBox" id="vbox">
+				<child>
+					<object class="GtkGrid" id="grid">
+						<property name="visible">True</property>
+						<property name="margin">6</property>
+						<property name="row-spacing">12</property>
+						<property name="column-spacing">6</property>
+						<child>
+							<object class="GtkLabel" id="capturingRateSpsLabel">
+								<property name="label">_Capturing rate [sps]:</property>
+								<property name="use-underline">True</property>
+								<property name="mnemonic-widget">capturingRateSpsEntry</property>
+							</object>
+							<packing>
+								<property name="top-attach">0</property>
+								<property name="left-attach">0</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkEntry" id="capturingRateSpsEntry" />
+							<packing>
+								<property name="top-attach">0</property>
+								<property name="left-attach">1</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkLabel" id="oscBufferIntervalLabel">
+								<property name="label">_Osc buffer [ms]:</property>
+								<property name="use-underline">True</property>
+								<property name="mnemonic-widget">oscBufferIntervalEntry</property>
+							</object>
+							<packing>
+								<property name="top-attach">1</property>
+								<property name="left-attach">0</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkEntry" id="oscBufferIntervalEntry" />
+							<packing>
+								<property name="top-attach">1</property>
+								<property name="left-attach">1</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkLabel" id="triggerLabel">
+								<property name="visible">True</property>
+								<property name="label">_Trigger:</property>
+								<property name="use-underline">True</property>
+								<property name="mnemonic-widget">triggerComboBox</property>
+							</object>
+							<packing>
+								<property name="top-attach">2</property>
+								<property name="left-attach">0</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkComboBoxText" id="triggerComboBox">
+								<property name="visible">True</property>
+								<items>
+									<item translatable="yes" id="auto">Auto</item>
+									<item translatable="yes" id="threshold-repetitive">Threshold Repetitive</item>
+									<item translatable="yes" id="threshold-single">Threshold Single</item>
+									<item translatable="yes" id="timed">Timed</item>
+									<item translatable="yes" id="freq-threshold-repetitive">Freq Threshold Repetitive</item>
+									<item translatable="yes" id="freq-threshold-single">Freq Threshold Single</item>
+								</items>
+							</object>
+							<packing>
+								<property name="top-attach">2</property>
+								<property name="left-attach">1</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkFrame" id="triggerThresholdFrame">
+								<property name="label">Trigger threshold settings</property>
+								<child>
+									<object class="GtkGrid" id="triggerThresholdGrid">
+										<property name="margin">6</property>
+										<property name="row-spacing">12</property>
+										<property name="column-spacing">6</property>
+										<child>
+											<object class="GtkLabel" id="triggerThresholdLabel">
+												<property name="label">Thre_shold:</property>
+												<property name="use-underline">True</property>
+												<property name="mnemonic-widget">triggerThresholdEntry</property>
+											</object>
+											<packing>
+												<property name="top-attach">0</property>
+												<property name="left-attach">0</property>
+											</packing>
+										</child>
+										<child>
+											<object class="GtkEntry" id="triggerThresholdEntry" />
+											<packing>
+												<property name="top-attach">0</property>
+												<property name="left-attach">1</property>
+											</packing>
+										</child>
+									</object>
+								</child>
+							</object>
+							<packing>
+								<property name="width">2</property>
+								<property name="top-attach">3</property>
+								<property name="left-attach">0</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkFrame" id="triggerTimedFrame">
+								<property name="label">Trigger timed settings</property>
+								<child>
+									<object class="GtkGrid" id="triggerTimedGrid">
+										<property name="margin">6</property>
+										<property name="row-spacing">12</property>
+										<property name="column-spacing">6</property>
+										<child>
+											<object class="GtkLabel" id="triggerIntervalLabel">
+												<property name="label">_Interval [us]:</property>
+												<property name="use-underline">True</property>
+												<property name="mnemonic-widget">triggerIntervalEntry</property>
+											</object>
+											<packing>
+												<property name="top-attach">0</property>
+												<property name="left-attach">0</property>
+											</packing>
+										</child>
+										<child>
+											<object class="GtkEntry" id="triggerIntervalEntry" />
+											<packing>
+												<property name="top-attach">0</property>
+												<property name="left-attach">1</property>
+											</packing>
+										</child>
+									</object>
+								</child>
+							</object>
+							<packing>
+								<property name="width">2</property>
+								<property name="top-attach">3</property>
+								<property name="left-attach">0</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkFrame" id="triggerFreqThresholdFrame">
+								<property name="label">Trigger freq threshold settings</property>
+								<child>
+									<object class="GtkGrid" id="triggerFreqThresholdGrid">
+										<property name="margin">6</property>
+										<property name="row-spacing">12</property>
+										<property name="column-spacing">6</property>
+										<child>
+											<object class="GtkLabel" id="triggerFreqLabel">
+												<property name="label">_Frequency:</property>
+												<property name="use-underline">True</property>
+												<property name="mnemonic-widget">triggerFreqEntry</property>
+											</object>
+											<packing>
+												<property name="top-attach">0</property>
+												<property name="left-attach">0</property>
+											</packing>
+										</child>
+										<child>
+											<object class="GtkEntry" id="triggerFreqEntry" />
+											<packing>
+												<property name="top-attach">0</property>
+												<property name="left-attach">1</property>
+											</packing>
+										</child>
+										<child>
+											<object class="GtkLabel" id="triggerFreqThresholdLabel">
+												<property name="label">_Threshold:</property>
+												<property name="use-underline">True</property>
+												<property name="mnemonic-widget">triggerFreqThresholdEntry</property>
+											</object>
+											<packing>
+												<property name="top-attach">1</property>
+												<property name="left-attach">0</property>
+											</packing>
+										</child>
+										<child>
+											<object class="GtkEntry" id="triggerFreqThresholdEntry" />
+											<packing>
+												<property name="top-attach">1</property>
+												<property name="left-attach">1</property>
+											</packing>
+										</child>
+									</object>
+								</child>
+							</object>
+							<packing>
+								<property name="width">2</property>
+								<property name="top-attach">3</property>
+								<property name="left-attach">0</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkButton" id="applyButton">
+								<property name="label">_Apply</property>
+								<property name="use-underline">True</property>
+							</object>
+							<packing>
+								<property name="top-attach">4</property>
+								<property name="left-attach">0</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkButton" id="okButton">
+								<property name="use-underline">True</property>
+								<property name="label">O_k</property>
+							</object>
+							<packing>
+								<property name="top-attach">4</property>
+								<property name="left-attach">1</property>
+							</packing>
+						</child>
+					</object>
+				</child>
+			</object>
+		</child>
+	</object>
+</interface>

@@ -20,6 +20,14 @@ Applications are standalone executables that have been developed for a specific 
 	<td><b>@subpage application-plc-cape-lab</b>
 	<td>@link ./applications/plc-cape-lab @endlink
 	<td>@copybrief application-plc-cape-lab
+<tr>
+	<td><b>@subpage application-plc-cape-freq-response</b>
+	<td>@link ./applications/plc-cape-freq-response @endlink
+	<td>@copybrief application-plc-cape-freq-response
+<tr>
+	<td><b>@subpage application-plc-cape-oscilloscope</b>
+	<td>@link ./applications/plc-cape-oscilloscope @endlink
+	<td>@copybrief application-plc-cape-oscilloscope
 </table>
 
 @dir applications

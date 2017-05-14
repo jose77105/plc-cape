@@ -5,7 +5,7 @@
  * @see		@ref plugins-encoder
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -13,42 +13,8 @@
 #ifndef PLUGINS_ENCODER_ENCODER_H
 #define PLUGINS_ENCODER_ENCODER_H
 
-/**
- * Common configurable settings.
- * A plugin should reuse these predefined symbols whenever possible
- */
-enum encoder_setting_enum
-{
-	encoder_setting_freq_dac_sps = 1,		// float*
-	encoder_setting_stream_type,			// enum stream_type_enum
-	encoder_setting_offset,					// uint32_t
-	encoder_setting_range,					// uint32_t
-	encoder_setting_freq,					// float*
-	encoder_setting_filename,				// const char*
-	encoder_setting_bit_width_us,			// uint32_t
-	encoder_setting_message,				// const char*
-};
-
-/**
- * Type of wave generation
- */
-enum stream_type_enum
-{
-	stream_ramp = 0,
-	stream_triangular,
-	stream_constant,
-	stream_freq_max,
-	stream_freq_max_div2,
-	stream_freq_sweep,
-	stream_freq_sweep_preload,
-	stream_file,
-	stream_bit_padding_per_cycle,
-	stream_am_modulation,
-	stream_freq_sinus,
-	stream_ook_pattern,
-	stream_ook_hi,
-	stream_COUNT
-};
+struct plc_setting_definition;
+union plc_setting_data;
 
 /**
  * @brief PLUGIN API duality. See @ref plugins for more info
@@ -66,7 +32,8 @@ typedef void *encoder_api_h;
  *			* To guarantee backwards compatibility add always new functions to the end of the struct
  *			and never modify the behavior of the existing ones
  */
-struct encoder_api {
+struct encoder_api
+{
 	/**
 	 * @brief	Constructor of a plugin-specific encoder object
 	 * @return
@@ -80,6 +47,16 @@ struct encoder_api {
 	 */
 	void (*release)(encoder_api_h handle);
 	/**
+	 * @brief	Asks for the settings accepted by the plugin
+	 * @param	handle			Handle to the encoder-plugin
+	 * @param	accepted_settings_count	The number of accepted settings
+	 * @return
+	 * 			A persistent pointer with a list of setting definitions.
+	 * 	 		The pointer must not be released
+	 */
+	const struct plc_setting_definition *(*get_accepted_settings)(encoder_api_h handle,
+			uint32_t *accepted_settings_count);
+	/**
 	 * @brief	Switch the plugin to _Configuration mode_
 	 * @param	handle	Handle to the encoder-plugin
 	 * @return	0 if the _Configuration mode_ can be started; -1 if error
@@ -88,12 +65,12 @@ struct encoder_api {
 	/**
 	 * @brief	Set the value of a specific setting. It requires the plugin to be in _Configuration
 	 *			mode_
-	 * @param	handle	Handle to the encoder-plugin
-	 * @param	setting	Identifier of the setting to be configured
-	 * @param	data	New data to be set. The type of it depends on each specific _setting_
+	 * @param	handle		Handle to the encoder-plugin
+	 * @param	identifier	Identifier of the setting to be configured
+	 * @param	data		New data to be set. The type of it depends on each specific setting
 	 * @return	0 if the provided setting and value are valid; -1 if error
 	 */
-	int (*set_setting)(encoder_api_h handle, enum encoder_setting_enum setting, const void *data);
+	int (*set_setting)(encoder_api_h handle, const char *identifier, union plc_setting_data data);
 	/**
 	 * @brief	End the _Configuration mode_ process. The configuration of the plugin is then
 	 *			effectively updated with the settings provided

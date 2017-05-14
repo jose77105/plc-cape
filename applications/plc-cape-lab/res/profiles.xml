@@ -1,0 +1,679 @@
+<plc-cape-lab.profile_definitions>
+
+	<!-- PROFILES -->
+	<profiles>
+
+		<!-- ALSA configuration for the desktop PC -->
+		<profile id="alsa_desktop" hidden="1">
+			<app-settings>
+				<setting id="tx_sampling_rate_sps">48000</setting>
+				<setting id="rx_sampling_rate_sps">48000</setting>
+				<setting id="data_offset">2100</setting>
+				<setting id="data_hi_threshold_detection">100</setting>
+			</app-settings>
+		</profile>
+
+		<!-- ALSA base configuration -->
+		<profile id="alsa" inherit="alsa_desktop" hidden="1">
+		</profile>
+
+		<!-- LOOPBACK -->
+		<profile id="loopback" hidden="1">
+			<app-settings>
+				<setting id="operating_mode">calib_dac_txpga</setting>
+				<setting id="tx_mode">ping_pong_dma</setting>
+				<setting id="rx_mode">kernel_buffering</setting>
+				<setting id="demod_mode">real_time</setting>
+				<setting id="data_offset">1100</setting>
+				<setting id="data_hi_threshold_detection">20</setting>
+			</app-settings>
+		</profile>
+
+		<profile id="loop_2kHz" inherit="loopback" title="LOOP 2kHz">
+			<app-settings>
+				<setting id="samples_to_file">1000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">freq_sinus</setting>
+				<setting id="freq">2000</setting>
+				<setting id="offset">800</setting>
+				<setting id="range">400</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-raw" />
+		</profile>
+
+		<profile id="loop_ramp_2k" inherit="loopback" title="LOOP Ramp 2kHz">
+			<app-settings>
+				<setting id="samples_to_file">1000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">ramp</setting>
+				<setting id="freq">2000</setting>
+				<setting id="offset">800</setting>
+				<setting id="range">400</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-raw" />
+		</profile>
+
+		<profile id="loop_ook_pattern_10k" inherit="loopback" title="LOOP OOK 10kHz">
+			<app-settings>
+				<setting id="samples_to_file">5000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">ook_pattern</setting>
+				<setting id="freq">10000</setting>
+				<setting id="offset">800</setting>
+				<setting id="range">400</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-raw" />
+		</profile>
+
+		<profile id="loop_ook_10kHz_msg" inherit="loopback" title="LOOP OOK 10kHz Msg">
+			<app-settings>
+				<setting id="data_offset">1151</setting>
+				<setting id="preload_buffer_len">100000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-ook">
+				<setting id="freq">10000</setting>
+				<setting id="offset">800</setting>
+				<setting id="range">400</setting>
+				<setting id="message">Hello World!</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-ook" />
+		</profile>
+
+		<profile id="loop_filter_pwm_110kHz_preload_msg" inherit="loopback"
+			title="LOOP + FILTER PWM 110kHz Preload Msg">
+			<app-settings>
+				<setting id="operating_mode">calib_dac_txpga_txfilter</setting>
+				<setting id="tx_sampling_rate_sps">500000</setting>
+				<setting id="preload_buffer_len">200000</setting>
+				<setting id="data_offset">1435</setting>
+				<setting id="data_hi_threshold_detection">30</setting>
+				<setting id="bit_width_us">100</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-pwm">
+				<setting id="freq">110000</setting>
+				<setting id="offset">500</setting>
+				<setting id="range">400</setting>
+				<setting id="message">HI</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-pwm" />
+		</profile>
+
+		<profile id="loop_filter_pwm_110kHz_preload_msg_timed" inherit="loop_filter_pwm_110kHz_preload_msg"
+			title="LOOP + FILTER PWM 110kHz Preload Msg Timed">
+			<app-settings>
+				<setting id="communication_timeout_ms">2000</setting>
+				<setting id="communication_interval_ms">5000</setting>
+			</app-settings>
+		</profile>
+
+		<profile id="loop_msg_morse_1kHz" inherit="loopback" title="LOOP Morse">
+			<app-settings>
+				<setting id="operating_mode">calib_dac_txpga_txfilter</setting>
+				<setting id="bit_width_us">10000</setting>
+				<setting id="preload_buffer_len">100000</setting>
+				<setting id="data_offset">1435</setting>
+				<setting id="data_hi_threshold_detection">30</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-morse">
+				<setting id="freq">1000</setting>
+				<setting id="offset">500</setting>
+				<setting id="range">400</setting>
+				<setting id="message">HI</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-morse">
+			</decoder-settings>
+		</profile>
+
+		<profile id="loopback_emulator" hidden="1">
+			<app-settings>
+				<setting id="operating_mode">calib_dac_txpga_txfilter</setting>
+				<setting id="tx_sampling_rate_sps">48000</setting>
+				<setting id="rx_sampling_rate_sps">48000</setting>
+				<setting id="tx_mode">ping_pong_dma</setting>
+				<setting id="rx_mode">kernel_buffering</setting>
+				<setting id="demod_mode">real_time</setting>
+				<setting id="data_offset">500</setting>
+			</app-settings>
+		</profile>
+
+		<profile id="loop_ook_10kHz_emulator" inherit="loopback_emulator" title="LOOP OOK 10kHz [Emulator]">
+			<app-settings>
+				<setting id="bit_width_us">3000</setting>
+				<setting id="data_hi_threshold_detection">50</setting>
+				<setting id="samples_to_file">48000</setting>
+				<setting id="preload_buffer_len">100000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-ook">
+				<setting id="freq">10000</setting>
+				<setting id="offset">500</setting>
+				<setting id="range">400</setting>
+				<setting id="message">OOK-1234</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-ook">
+				<setting id="freq">0</setting>
+			</decoder-settings>
+		</profile>
+
+		<profile id="loop_pwm_10kHz_emulator" inherit="loopback_emulator" title="LOOP PWM 10kHz [Emulator]">
+			<app-settings>
+				<setting id="bit_width_us">1000</setting>
+				<setting id="data_hi_threshold_detection">100</setting>
+				<setting id="samples_to_file">35000</setting>
+				<setting id="preload_buffer_len">70000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-pwm">
+				<setting id="freq">10000</setting>
+				<setting id="offset">500</setting>
+				<setting id="range">400</setting>
+				<setting id="message">PWM-1234</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-pwm">
+				<setting id="freq">0</setting>
+			</decoder-settings>
+		</profile>
+
+		<profile id="loop_morse_10kHz_emulator" inherit="loopback_emulator" title="LOOP Morse 10kHz [Emulator]">
+			<app-settings>
+				<setting id="bit_width_us">5000</setting>
+				<setting id="data_hi_threshold_detection">100</setting>
+				<setting id="samples_to_file">7000</setting>
+				<setting id="preload_buffer_len">14000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-morse">
+				<setting id="freq">1000</setting>
+				<setting id="offset">500</setting>
+				<setting id="range">400</setting>
+				<setting id="message">SOS</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-morse">
+				<setting id="freq">0</setting>
+			</decoder-settings>
+		</profile>
+
+		<profile id="loop_morse_10kHz_interf_3kHz_emulator" inherit="loop_morse_10kHz_emulator" title="LOOP Morse 10kHz + INTERF 3kHz [Emulator]">
+			<encoder-settings plugin="encoder-morse">
+				<setting id="interference_range">400</setting>
+				<setting id="interference_freq">3000</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-morse">
+				<setting id="freq">1000</setting>
+			</decoder-settings>
+		</profile>
+
+		<!-- TX_PGA -->
+		<profile id="tx_pga" hidden="1">
+			<app-settings>
+				<setting id="operating_mode">tx_dac_txpga_txfilter</setting>
+				<setting id="tx_mode">ping_pong_dma</setting>
+				<setting id="rx_mode">none</setting>
+				<setting id="tx_sampling_rate_sps">70000</setting>
+				<setting id="tx_buffers_len">1000</setting>
+			</app-settings>
+		</profile>
+
+		<!-- TX_PGA : ENCODER-WAVE -->
+		<profile id="tx_2kHz" inherit="tx_pga" title="TX 2kHz">
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">freq_sinus</setting>
+				<setting id="freq">2000</setting>
+				<setting id="offset">800</setting>
+				<setting id="range">400</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_110k_preload" inherit="tx_pga" title="TX 110kHz Preload">
+			<app-settings>
+				<setting id="tx_sampling_rate_sps">500000</setting>
+				<setting id="preload_buffer_len">200000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">freq_sinus</setting>
+				<setting id="freq">110000</setting>
+				<setting id="offset">512</setting>
+				<setting id="range">510</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_50k_max_range_preload" inherit="tx_pga" title="TX 110kHz Preload">
+			<app-settings>
+				<setting id="tx_sampling_rate_sps">500000</setting>
+				<setting id="preload_buffer_len">200000</setting>
+				<setting id="gain_tx_pga">1.00</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">freq_sinus</setting>
+				<setting id="freq">50000</setting>
+				<setting id="offset">400</setting>
+				<setting id="range">764</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_file_94k" inherit="tx_pga" title="TX File 94kbps">
+			<app-settings>
+				<setting id="tx_sampling_rate_sps">8000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">file</setting>
+				<setting id="filename">spi.bin</setting>
+			</encoder-settings>
+		</profile>
+
+		<!-- TX_PGA : ENCODER-OOK -->
+		<profile id="tx_ook_110k" inherit="tx_pga" title="TX OOK 110kHz">
+			<app-settings>
+				<setting id="tx_sampling_rate_sps">500000</setting>
+				<setting id="preload_buffer_len">200000</setting>
+				<setting id="bit_width_us">1000</setting>
+				<setting id="gain_tx_pga">1.00</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-ook">
+				<setting id="freq">110000</setting>
+				<setting id="offset">400</setting>
+				<setting id="range">800</setting>
+				<setting id="message">Hi</setting>
+			</encoder-settings>
+		</profile>
+
+		<!-- TX_PGA : ENCODER-PWM -->
+		<profile id="tx_pwm_110k" inherit="tx_pga" title="TX PWM 110kHz">
+			<app-settings>
+				<setting id="tx_sampling_rate_sps">500000</setting>
+				<setting id="preload_buffer_len">200000</setting>
+				<setting id="bit_width_us">100</setting>
+				<setting id="gain_tx_pga">1.00</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-pwm">
+				<setting id="freq">110000</setting>
+				<setting id="offset">400</setting>
+				<setting id="range">800</setting>
+				<setting id="message">Hi</setting>
+			</encoder-settings>
+		</profile>
+
+		<!-- TX_PGA : ENCODER-MORSE -->
+		<profile id="tx_morse_110k" inherit="tx_pga" title="TX MORSE 110kHz">
+			<app-settings>
+				<setting id="tx_sampling_rate_sps">500000</setting>
+				<setting id="preload_buffer_len">200000</setting>
+				<setting id="bit_width_us">1000</setting>
+				<setting id="gain_tx_pga">1.00</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-morse">
+				<setting id="freq">110000</setting>
+				<setting id="offset">400</setting>
+				<setting id="range">800</setting>
+				<setting id="message">HI</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_msg_morse_alsa" inherit="tx_pga" title="TX Morse ALSA">
+			<app-settings>
+				<setting id="tx_sampling_rate_sps">48000</setting>
+				<setting id="bit_width_us">100000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-morse">
+				<setting id="freq">1000</setting>
+				<setting id="offset">800</setting>
+				<setting id="range">400</setting>
+				<setting id="message">SOS</setting>
+			</encoder-settings>
+		</profile>
+
+		<!-- TX_PGA : ENCODER-WAV -->
+		<profile id="play_sound.beep" inherit="tx_pga" title="Play Beep">
+			<app-settings>
+				<setting id="tx_sampling_rate_sps">48000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-wav">
+				<setting id="filename">beep.wav</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="play_sound.mario" inherit="tx_pga" title="Play Mario">
+			<encoder-settings plugin="encoder-wav">
+				<setting id="filename">mario.wav</setting>
+			</encoder-settings>
+		</profile>
+
+		<!-- TX_PA -->
+		<profile id="tx_pa" hidden="1">
+			<app-settings>
+				<setting id="operating_mode">tx_dac_txpga_txfilter_pa</setting>
+				<setting id="tx_mode">ping_pong_dma</setting>
+				<setting id="rx_mode">none</setting>
+			</app-settings>
+		</profile>
+
+		<!-- TX_PA : ENCODER-WAVE -->
+		<profile id="encoder-wave:tx_pa" inherit="tx_pa" hidden="1">
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">freq_sinus</setting>
+				<setting id="offset">500</setting>
+				<setting id="range">200</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_pa_sin_10kHz" inherit="encoder-wave:tx_pa" title="TX+PA sin 10kHz">
+			<encoder-settings plugin="encoder-wave">
+				<setting id="freq">10000</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_pa_sin_110kHz_6Mbps_preload" inherit="encoder-wave:tx_pa"
+			title="TX+PA 110kHz 500ksps [6Mbps] Preload">
+			<app-settings>
+				<setting id="tx_sampling_rate_sps">500000</setting>
+				<setting id="preload_buffer_len">10000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-wave">
+				<setting id="freq">110000</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_pa_sin_quarter" inherit="encoder-wave:tx_pa" title="TX+PA sin(fs/4)">
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">freq_max_div2</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_pa_sin_sweep" inherit="encoder-wave:tx_pa" title="TX+PA freq sweep">
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">freq_sweep</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_pa_sin_sweep_preload" inherit="encoder-wave:tx_pa" title="TX+PA freq sweep-preload">
+			<app-settings>
+				<setting id="tx_sampling_rate_sps">500000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">freq_sweep_preload</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_pa_ook_20k" inherit="encoder-wave:tx_pa" title="TX+PA OOK 20kHz">
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">ook_pattern</setting>
+				<setting id="freq">20000</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_pa_constant" inherit="encoder-wave:tx_pa" title="TX+PA Constant">
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">constant</setting>
+			</encoder-settings>
+		</profile>
+
+		<!-- TX_PA : ENCODER-PWM -->
+		<profile id="encoder-pwm:tx_pa" inherit="tx_pa" hidden="1">
+			<encoder-settings plugin="encoder-pwm">
+				<setting id="offset">500</setting>
+				<setting id="range">200</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_pa_pwm_110k_msg" inherit="encoder-pwm:tx_pa" title="TX+PA PWM 110kHz + Msg">
+			<app-settings>
+				<setting id="tx_sampling_rate_sps">500000</setting>
+				<setting id="preload_buffer_len">200000</setting>
+				<setting id="bit_width_us">100</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-pwm">
+				<setting id="freq">110000</setting>
+				<setting id="message">Hi</setting>
+			</encoder-settings>
+		</profile>
+
+		<!-- TX_PA_RX -->
+		<profile id="tx_pa_rx" hidden="1">
+			<app-settings>
+				<setting id="operating_mode">tx_dac_txpga_txfilter_pa_rx</setting>
+				<setting id="tx_mode">ping_pong_dma</setting>
+				<setting id="rx_mode">kernel_buffering</setting>
+				<setting id="data_offset">1885</setting>
+				<setting id="data_hi_threshold_detection">20</setting>
+			</app-settings>
+		</profile>
+
+		<profile id="tx_pa_rx_alsa" inherit="alsa" hidden="1">
+			<app-settings>
+				<setting id="operating_mode">tx_dac_txpga_txfilter_pa_rx</setting>
+				<setting id="tx_mode">ping_pong_dma</setting>
+				<setting id="rx_mode">kernel_buffering</setting>
+				<setting id="demod_mode">real_time</setting>
+			</app-settings>
+		</profile>
+
+		<!-- TX_PA_RX : ENCODER-WAVE -->
+		<profile id="encoder-wave:tx_pa_rx" inherit="tx_pa_rx" hidden="1">
+			<encoder-settings plugin="encoder-wave">
+				<setting id="offset">500</setting>
+				<setting id="range">200</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-raw" />
+		</profile>
+
+		<profile id="tx_pa_rx_sin_2kHz" inherit="encoder-wave:tx_pa_rx" title="TX+PA+RX sin 2kHz">
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">freq_sinus</setting>
+				<setting id="freq">2000</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_pa_rx_sin_2kHz_alsa" inherit="tx_pa_rx_alsa" title="TX+PA+RX sin 2kHz [ALSA]">
+			<app-settings>
+				<setting id="samples_to_file">480</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">freq_sinus</setting>
+				<setting id="freq">2000</setting>
+				<setting id="offset">500</setting>
+				<setting id="range">200</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-raw" />
+		</profile>
+
+		<profile id="tx_pa_rx_ook_9kHz" inherit="encoder-wave:tx_pa_rx" title="TX+PA+RX ook 9kHz">
+			<encoder-settings plugin="encoder-wave">
+				<setting id="stream_type">ook_pattern</setting>
+				<setting id="freq">9000</setting>
+			</encoder-settings>
+		</profile>
+
+		<profile id="tx_pa_rx_ook_1kHz_alsa" inherit="tx_pa_rx_alsa" title="TX+PA+RX OOK 1kHz [ALSA]">
+			<app-settings>
+				<setting id="bit_width_us">5000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-ook">
+				<setting id="freq">1000</setting>
+				<setting id="offset">500</setting>
+				<setting id="range">400</setting>
+				<setting id="message">Hello World!</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-ook" />
+		</profile>
+
+		<profile id="tx_pa_rx_morse_alsa" inherit="tx_pa_rx_alsa" title="TX+PA+RX Morse 1kHz [ALSA]">
+			<app-settings>
+				<setting id="bit_width_us">50000</setting>
+				<setting id="preload_buffer_len">100000</setting>
+				<setting id="samples_to_file">60000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-morse">
+				<setting id="freq">1000</setting>
+				<setting id="offset">500</setting>
+				<setting id="range">400</setting>
+				<setting id="message">SOS</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-morse">
+			</decoder-settings>
+		</profile>
+
+		<profile id="tx_pa_rx_pwm_alsa" inherit="tx_pa_rx_alsa" title="TX+PA+RX PWM [ALSA]">
+			<app-settings>
+				<setting id="bit_width_us">2000</setting>
+				<setting id="preload_buffer_len">200000</setting>
+			</app-settings>
+			<encoder-settings plugin="encoder-pwm">
+				<setting id="freq">2000</setting>
+				<setting id="offset">500</setting>
+				<setting id="range">400</setting>
+				<setting id="message">Hello world!</setting>
+			</encoder-settings>
+			<decoder-settings plugin="decoder-pwm">
+			</decoder-settings>
+		</profile>
+
+		<!-- RX -->
+		<profile id="rx" hidden="1">
+			<app-settings>
+				<setting id="operating_mode">rx</setting>
+				<setting id="tx_mode">none</setting>
+				<setting id="rx_mode">kernel_buffering</setting>
+				<setting id="data_offset">1304</setting>
+				<setting id="data_hi_threshold_detection">20</setting>
+				<setting id="bit_width_us">1000</setting>
+			</app-settings>
+		</profile>
+
+		<profile id="rx_alsa" inherit="alsa" hidden="1">
+			<app-settings>
+				<setting id="operating_mode">rx</setting>
+				<setting id="tx_mode">none</setting>
+				<setting id="rx_mode">kernel_buffering</setting>
+				<setting id="demod_mode">real_time</setting>
+			</app-settings>
+		</profile>
+
+		<profile id="rx_ook_110k" inherit="rx" title="RX OOK 110k">
+			<decoder-settings plugin="decoder-ook">
+				<setting id="freq">0.0</setting>
+			</decoder-settings>
+		</profile>
+
+		<profile id="rx_pwm_110k" inherit="rx" title="RX PWM 110k">
+			<app-settings>
+				<setting id="bit_width_us">100</setting>
+			</app-settings>
+			<decoder-settings plugin="decoder-pwm">
+				<setting id="freq">0.0</setting>
+			</decoder-settings>
+		</profile>
+
+		<profile id="rx_morse_110k" inherit="rx" title="RX MORSE 110k">
+			<app-settings>
+			</app-settings>
+			<decoder-settings plugin="decoder-morse">
+				<setting id="freq">0.0</setting>
+			</decoder-settings>
+		</profile>
+
+		<profile id="rx_morse_alsa" inherit="rx_alsa" title="RX MORSE ALSA">
+			<app-settings>
+				<setting id="bit_width_us">100000</setting>
+			</app-settings>
+			<decoder-settings plugin="decoder-morse">
+				<setting id="freq">0.0</setting>
+			</decoder-settings>
+		</profile>
+
+		<profile id="rx_raw_real_time" inherit="rx" title="RX Real-time">
+			<app-settings>
+				<setting id="gain_rx_pga2">1</setting>
+				<setting id="rx_samples_filename">adc.csv</setting>
+				<setting id="samples_to_file">2000</setting>
+			</app-settings>
+			<decoder-settings plugin="decoder-raw" />
+		</profile>
+
+		<profile id="rx_raw_deferred" inherit="rx" title="RX Deferred">
+			<app-settings>
+				<setting id="demod_mode">deferred</setting>
+				<setting id="samples_to_file">2000</setting>
+			</app-settings>
+			<decoder-settings plugin="decoder-raw" />
+		</profile>
+
+	</profiles>
+
+	<!-- TREE -->
+	<tree>
+		<node title="EMULATION">
+			<node title="TX+RX CAL">
+				<profile id="loop_ook_10kHz_emulator" />
+				<profile id="loop_pwm_10kHz_emulator" />
+				<profile id="loop_morse_10kHz_emulator" />
+				<profile id="loop_morse_10kHz_interf_3kHz_emulator" />
+			</node>
+			<node title="TX">
+				<profile id="play_sound.beep" />
+				<profile id="play_sound.mario" />
+				<profile id="tx_msg_morse_alsa" />
+			</node>
+			<node title="TX+PA+RX">
+				<profile id="tx_pa_rx_sin_2kHz_alsa" />
+				<profile id="tx_pa_rx_ook_1kHz_alsa" />
+				<profile id="tx_pa_rx_morse_alsa" />
+				<profile id="tx_pa_rx_pwm_alsa" />
+			</node>
+			<node title="RX">
+				<profile id="rx_morse_alsa" />
+			</node>
+		</node>
+		<node title="TX+RX CAL">
+			<profile id="loop_2kHz" />
+			<profile id="loop_ramp_2k" />
+			<profile id="loop_ook_pattern_10k" />
+			<profile id="loop_ook_10kHz_msg" />
+			<profile id="loop_filter_pwm_110kHz_preload_msg" />
+			<profile id="loop_filter_pwm_110kHz_preload_msg_timed" />
+			<profile id="loop_msg_morse_1kHz" />
+		</node>
+		<node title="TX">
+			<node title="TX + WAVE">
+				<profile id="tx_2kHz" />
+				<profile id="tx_110k_preload" />
+				<profile id="tx_50k_max_range_preload" />
+				<profile id="tx_file_94k" />
+			</node>
+			<node title="TX + OOK">
+				<profile id="tx_ook_110k" />
+			</node>
+			<node title="TX + PWM">
+				<profile id="tx_pwm_110k" />
+			</node>
+			<node title="TX + MORSE">
+				<profile id="tx_morse_110k" />
+			</node>
+			<node title="TX + WAV">
+				<profile id="play_sound.beep" />
+				<profile id="play_sound.mario" />
+			</node>
+		</node>
+		<node title="TX+PA">
+			<profile id="tx_pa_sin_10kHz" />
+			<profile id="tx_pa_sin_110kHz_6Mbps_preload" />
+			<profile id="tx_pa_sin_quarter" />
+			<profile id="tx_pa_sin_sweep" />
+			<profile id="tx_pa_sin_sweep_preload" />
+			<profile id="tx_pa_ook_20k" />
+			<profile id="tx_pa_constant" />
+			<profile id="tx_pa_pwm_110k_msg" />
+		</node>
+		<node title="TX+PA+RX">
+			<profile id="tx_pa_rx_sin_2kHz" />
+			<profile id="tx_pa_rx_ook_9kHz" />
+		</node>
+		<node title="RX">
+			<profile id="rx_ook_110k" />
+			<profile id="rx_pwm_110k" />
+			<profile id="rx_morse_110k" />
+			<profile id="rx_raw_real_time" />
+			<profile id="rx_raw_deferred" />
+		</node>
+	</tree>
+
+</plc-cape-lab.profile_definitions>

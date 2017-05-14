@@ -3,13 +3,17 @@
  * @brief	Helper functions related to the plugin management
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
 #ifndef LIBPLC_TOOLS_PLUGIN_H
 #define LIBPLC_TOOLS_PLUGIN_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @brief Allowed plugin categories
@@ -56,5 +60,9 @@ void plc_plugin_list_release(struct plc_plugin_list *plc_plugin_list);
  * @return	The posistion within the _plugin_list_
  */
 int plc_plugin_list_find_name(struct plc_plugin_list *plc_plugin_list, const char *plugin_name);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LIBPLC_TOOLS_PLUGIN_H */

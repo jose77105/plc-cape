@@ -2,25 +2,26 @@
  * @file
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
 #include "+common/api/+base.h"
+#include "+common/api/setting.h"
 #include "common.h"
+#include "libraries/libplc-tools/api/settings.h"	// plc_setting_named_list
 #include "plugins.h"
 #include "encoder.h"
-
-const char *stream_type_enum_text[stream_COUNT] =
-{ "ramp", "triangular", "constant", "freq_max", "freq_max_div2", "freq_sweep", "freq_sweep_preload",
-		"file", "bit_padding_per_cycle", "am_modulation", "freq_sinus", "ook_pattern", "ook_hi", };
 
 struct encoder
 {
 	struct plugin *plugin;
 	struct encoder_api *api;
 	encoder_api_h api_handle;
+	char *name;
+	struct plc_setting_named_list settings;
+	int invalid_configuration;
 	// Data source copy mode
 	uint16_t *data_source;
 	uint16_t *data_source_cur;
@@ -36,83 +37,88 @@ struct encoder *encoder_create(const char *path)
 	encoder->plugin = load_plugin(path, (void**) &encoder->api, &api_version, &api_size);
 	assert((api_version >= 1) && (api_size >= sizeof(struct encoder_api)));
 	encoder->api_handle = encoder->api->create();
+	encoder->name = strdup(strrchr(path, '/') + 1);
+	encoder->settings.definitions = encoder->api->get_accepted_settings(encoder->api_handle,
+			&encoder->settings.definitions_count);
 	return encoder;
 }
 
 void encoder_release(struct encoder *encoder)
 {
+	plc_setting_clear_settings_linked(&encoder->settings);
+	free(encoder->name);
 	encoder->api->release(encoder->api_handle);
 	unload_plugin(encoder->plugin);
 	free(encoder);
 }
 
-static void set_setting(const struct encoder *encoder, enum encoder_setting_enum setting,
-		const void *data)
+void encoder_set_configuration(struct encoder *encoder, const struct setting_list_item *setting_list)
 {
-	int ret = encoder->api->set_setting(encoder->api_handle, setting, data);
-	if (ret != 0)
-		log_and_exit(get_last_error());
+	plc_setting_normalize(setting_list, &encoder->settings);
 }
 
-void encoder_configure_WAVE(struct encoder *encoder, enum stream_type_enum stream_type,
-		int samples_offset, int samples_range, float samples_freq, const char *filename,
+void encoder_set_default_configuration(struct encoder *encoder)
+{
+	struct setting_list_item *setting_list = NULL;
+	// TODO: Improve or remove artificial use of intermediate 'setting_list'
+	plc_setting_load_all_default_settings(&encoder->settings, &setting_list);
+	plc_setting_clear_settings(&setting_list);
+}
+
+void encoder_apply_configuration(struct encoder *encoder, float sampling_rate_sps,
 		uint32_t bit_width_us)
 {
+	uint32_t n;
 	int ret = encoder->api->begin_settings(encoder->api_handle);
-	if (ret < 0)
-		log_and_exit(get_last_error());
-	set_setting(encoder, encoder_setting_freq_dac_sps, &freq_dac_sps);
-	set_setting(encoder, encoder_setting_stream_type, (void*) stream_type);
-	switch (stream_type)
+	if (ret == 0)
 	{
-	case stream_file:
-		set_setting(encoder, encoder_setting_filename, filename);
-		break;
-	default:
-		set_setting(encoder, encoder_setting_offset, (void*) samples_offset);
-		set_setting(encoder, encoder_setting_range, (void*) samples_range);
-		set_setting(encoder, encoder_setting_freq, &samples_freq);
-		if ((stream_type == stream_ook_pattern) || (stream_type == stream_ook_hi))
-			set_setting(encoder, encoder_setting_bit_width_us, (void*) bit_width_us);
-		break;
+		// First check for default global settings
+		const struct plc_setting_definition *setting_definition = encoder->settings.definitions;
+		for (n = encoder->settings.definitions_count; (n > 0) && (ret == 0); n--, setting_definition++)
+		{
+			union plc_setting_data setting_data;
+			if (strcmp(setting_definition->identifier, "sampling_rate_sps") == 0)
+			{
+				assert(setting_definition->type == plc_setting_float);
+				setting_data.f = sampling_rate_sps;
+			}
+			else if (strcmp(setting_definition->identifier, "bit_width_us") == 0)
+			{
+				assert(setting_definition->type == plc_setting_u32);
+				setting_data.u32 = bit_width_us;
+			}
+			else
+			{
+				// Continue with the loop without specific processing
+				continue;
+			}
+			ret = encoder->api->set_setting(encoder->api_handle, setting_definition->identifier,
+					setting_data);
+		}
+		if (ret == 0)
+		{
+			// Set the custom settings
+			const struct setting_linked_list_item *setting_item = encoder->settings.linked_list;
+			while (setting_item != NULL)
+			{
+				int ret = encoder->api->set_setting(encoder->api_handle,
+						setting_item->setting.definition->identifier,
+						setting_item->setting.data);
+				if (ret != 0)
+					break;
+				setting_item = setting_item->next;
+			}
+		}
+		// TODO: Improve error control
+		if (ret != 0)
+			log_line(get_last_error());
+		int ret_end = encoder->api->end_settings(encoder->api_handle);
+		if (ret == 0)
+			ret = ret_end;
 	}
-	ret = encoder->api->end_settings(encoder->api_handle);
-	if (ret < 0)
-		log_and_exit(get_last_error());
-}
-
-void encoder_configure_OOK(struct encoder *encoder, int samples_offset, int samples_range,
-		float samples_freq, uint32_t bit_width_us, const char *message_to_send)
-{
-	int ret = encoder->api->begin_settings(encoder->api_handle);
-	if (ret < 0)
-		log_and_exit(get_last_error());
-	set_setting(encoder, encoder_setting_freq_dac_sps, &freq_dac_sps);
-	set_setting(encoder, encoder_setting_offset, (void*) samples_offset);
-	set_setting(encoder, encoder_setting_range, (void*) samples_range);
-	set_setting(encoder, encoder_setting_freq, &samples_freq);
-	set_setting(encoder, encoder_setting_bit_width_us, (void*) bit_width_us);
-	set_setting(encoder, encoder_setting_message, message_to_send);
-	ret = encoder->api->end_settings(encoder->api_handle);
-	if (ret < 0)
-		log_and_exit(get_last_error());
-}
-
-void encoder_configure_PWM(struct encoder *encoder, int samples_offset, int samples_range,
-		float samples_freq, uint32_t bit_width_us, const char *message_to_send)
-{
-	int ret = encoder->api->begin_settings(encoder->api_handle);
-	if (ret < 0)
-		log_and_exit(get_last_error());
-	set_setting(encoder, encoder_setting_freq_dac_sps, &freq_dac_sps);
-	set_setting(encoder, encoder_setting_offset, (void*) samples_offset);
-	set_setting(encoder, encoder_setting_range, (void*) samples_range);
-	set_setting(encoder, encoder_setting_freq, &samples_freq);
-	set_setting(encoder, encoder_setting_bit_width_us, (void*) bit_width_us);
-	set_setting(encoder, encoder_setting_message, message_to_send);
-	ret = encoder->api->end_settings(encoder->api_handle);
-	if (ret < 0)
-		log_and_exit(get_last_error());
+	if (ret != 0)
+		log_line(get_last_error());
+	encoder->invalid_configuration = (ret != 0);
 }
 
 void encoder_reset(struct encoder *encoder)
@@ -163,4 +169,19 @@ void encoder_set_copy_mode(struct encoder *encoder, uint16_t *data_source, uint3
 	encoder->data_source_end = data_source + data_source_len;
 	encoder->data_source_len = data_source_len;
 	encoder->continuous_mode = continuous_mode;
+}
+
+int encoder_is_ready(struct encoder *encoder)
+{
+	return !encoder->invalid_configuration;
+}
+
+struct setting_linked_list_item *encoder_get_settings(struct encoder *encoder)
+{
+	return encoder->settings.linked_list;
+}
+
+const char *encoder_get_name(struct encoder *encoder)
+{
+	return encoder->name;
 }

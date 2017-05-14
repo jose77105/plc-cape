@@ -1,0 +1,207 @@
+<?xml version="1.0"?>
+<interface>
+	<!-- interface-requires gtk+ 3.0 -->
+	<requires lib="gtk+" version="3.0" />
+	<menu id="appmenu">
+		<submenu id="file-menu">
+			<attribute name="label" translatable="yes">_File</attribute>
+			<section>
+				<submenu id="load-configuration">
+					<attribute name="label" translatable="yes">_Load configuration</attribute>
+					<attribute name="icon">document-open</attribute>
+				</submenu>
+				<item>
+					<attribute name="action">app.reload-configuration</attribute>
+					<attribute name="icon">document-open</attribute>
+					<attribute name="label">_Reload configuration</attribute>
+					<attribute name="accel">&lt;Primary&gt;r</attribute>
+				</item>
+				<submenu>
+					<attribute name="label" translatable="yes">_Export</attribute>
+					<item>
+						<attribute name="action">app.save-samples</attribute>
+						<attribute name="icon">document-save</attribute>
+						<attribute name="label">Export _samples</attribute>
+					</item>
+					<item>
+						<attribute name="action">app.save-png</attribute>
+						<attribute name="icon">document-save</attribute>
+						<attribute name="label">Export _PNG</attribute>
+					</item>
+					<item>
+						<attribute name="action">app.save-svg</attribute>
+						<attribute name="icon">document-save</attribute>
+						<attribute name="label">Export S_VG</attribute>
+					</item>
+				</submenu>
+			</section>
+			<section>
+				<item>
+					<attribute name="action">app.quit</attribute>
+					<attribute name="icon">application-exit</attribute>
+					<attribute name="label">_Quit</attribute>
+					<attribute name="accel">&lt;Primary&gt;q</attribute>
+				</item>
+			</section>
+		</submenu>
+		<submenu>
+			<attribute name="label">_Edit</attribute>
+			<submenu id="dragging-mode-menu">
+				<attribute name="label">_Dragging</attribute>
+				<section>
+					<item>
+						<attribute name="action">app.set-dragging</attribute>
+						<attribute name="target" type="i">0</attribute>
+						<attribute name="label">_Free cursor</attribute>
+						<attribute name="accel">&lt;Primary&gt;F</attribute>
+					</item>
+					<item>
+						<attribute name="action">app.set-dragging</attribute>
+						<attribute name="target" type="i">1</attribute>
+						<attribute name="label">_Sticky cursor</attribute>
+						<attribute name="accel">&lt;Primary&gt;S</attribute>
+					</item>
+					<item>
+						<attribute name="action">app.set-dragging</attribute>
+						<attribute name="target" type="i">2</attribute>
+						<attribute name="label">Scroll _X</attribute>
+						<attribute name="accel">&lt;Primary&gt;X</attribute>
+					</item>
+					<item>
+						<attribute name="action">app.set-dragging</attribute>
+						<attribute name="target" type="i">3</attribute>
+						<attribute name="label">Scroll _Y</attribute>
+						<attribute name="accel">&lt;Primary&gt;Y</attribute>
+					</item>
+					<item>
+						<attribute name="action">app.set-dragging</attribute>
+						<attribute name="target" type="i">4</attribute>
+						<attribute name="label">Scale X (_Width)</attribute>
+						<attribute name="accel">&lt;Primary&gt;W</attribute>
+					</item>
+					<item>
+						<attribute name="action">app.set-dragging</attribute>
+						<attribute name="target" type="i">5</attribute>
+						<attribute name="label">Scale Y (_Height)</attribute>
+						<attribute name="accel">&lt;Primary&gt;H</attribute>
+					</item>
+					<item>
+						<attribute name="action">app.set-dragging</attribute>
+						<attribute name="target" type="i">6</attribute>
+						<attribute name="label">Scale to _Area</attribute>
+						<attribute name="accel">&lt;Primary&gt;A</attribute>
+					</item>
+				</section>
+			</submenu>
+			<submenu id="statistics-menu">
+				<attribute name="label">_Statistics</attribute>
+			</submenu>
+			<submenu id="scripts-menu">
+				<attribute name="label">_Scripts</attribute>
+				<item>
+					<attribute name="action">app.select-script</attribute>
+					<attribute name="target">script1</attribute>
+					<attribute name="label">Script 1</attribute>
+				</item>
+				<item>
+					<attribute name="action">app.select-script</attribute>
+					<attribute name="target">sctipt2</attribute>
+					<attribute name="label">Script 2</attribute>
+				</item>
+			</submenu>
+			<section>
+				<item>
+					<attribute name="action">app.preferences</attribute>
+					<attribute name="label">_Preferences...</attribute>
+					<attribute name="accel"><![CDATA[<Ctrl>P]]></attribute>
+				</item>
+			</section>
+		</submenu>
+		<submenu>
+			<attribute name="label">_Run</attribute>
+			<section>
+				<item>
+					<attribute name="action">app.start</attribute>
+					<attribute name="label">Start</attribute>
+					<attribute name="accel">&lt;Primary&gt;s</attribute>
+				</item>
+			</section>
+			<section>
+				<item>
+					<attribute name="action">app.stop</attribute>
+					<attribute name="label">Stop</attribute>
+					<attribute name="accel">&lt;Primary&gt;t</attribute>
+				</item>
+			</section>
+		</submenu>
+		<submenu id="tools-menu">
+			<attribute name="label">_Tools</attribute>
+			<section>
+				<item>
+					<attribute name="action">app.toggle-grid</attribute>
+					<attribute name="label">Toggle _grid</attribute>
+					<attribute name="accel">&lt;Primary&gt;G</attribute>
+				</item>
+				<item>
+					<attribute name="action">app.toggle-fft</attribute>
+					<attribute name="label">Toggle _FFT</attribute>
+					<attribute name="accel">&lt;Primary&gt;F</attribute>
+				</item>
+				<item>
+					<attribute name="action">app.auto-scale-y</attribute>
+					<attribute name="label">Auto Scale _Y</attribute>
+				</item>
+				<item>
+					<attribute name="action">app.auto-offset-y</attribute>
+					<attribute name="label">Auto Offset _Y</attribute>
+					<attribute name="accel">&lt;Primary&gt;Y</attribute>
+				</item>
+				<item>
+					<attribute name="action">app.auto-scale-x</attribute>
+					<attribute name="label">Reset _X Scale</attribute>
+				</item>
+				<item>
+					<attribute name="action">app.toggle-live-info-panel</attribute>
+					<attribute name="label">_Live info panel</attribute>
+				</item>
+				<item>
+					<attribute name="action">app.toggle-static-grid</attribute>
+					<attribute name="label">_Static grid</attribute>
+				</item>
+			</section>
+		</submenu>
+		<submenu>
+			<attribute name="label">_Help</attribute>
+			<section>
+				<item>
+					<attribute name="action">app.about</attribute>
+					<attribute name="label">_About...</attribute>
+					<attribute name="icon">help-about</attribute>
+				</item>
+			</section>
+		</submenu>
+	</menu>
+	<!-- TODO: Revise where 'winmenu' is used on 3rd-party apps -->
+	<menu id="winmenu">
+		<submenu>
+			<attribute name="label">_File</attribute>
+			<section>
+				<item>
+					<attribute name="label">_New...</attribute>
+					<attribute name="action">win.new</attribute>
+					<attribute name="accel">&lt;primary&gt;n</attribute>
+				</item>
+				<item>
+					<attribute name="label">_Open...</attribute>
+					<attribute name="action">win.open</attribute>
+					<attribute name="accel">&lt;primary&gt;o</attribute>
+				</item>
+				<item>
+					<attribute name="label">Open _Location...</attribute>
+					<attribute name="action">win.open-location</attribute>
+					<attribute name="accel">&lt;primary&gt;l</attribute>
+				</item>
+			</section>
+		</submenu>
+	</menu>
+</interface>

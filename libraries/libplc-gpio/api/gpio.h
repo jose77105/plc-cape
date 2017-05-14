@@ -3,13 +3,17 @@
  * @brief	General Purpose Input/Output public functionality
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
 #ifndef LIBPLC_GPIO_GPIO_H
 #define LIBPLC_GPIO_GPIO_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @brief	Sets the 'gpio' library to work in normal mode (hardware-based) or in emulation mode
@@ -115,5 +119,9 @@ void plc_gpio_sysfs_pin_set(struct plc_gpio_sysfs_pin *plc_gpio_sysfs_pin, int o
  */
 void plc_gpio_sysfs_pin_callback(struct plc_gpio_sysfs_pin *plc_gpio_sysfs_pin,
 		void (*callback)(void *data, int flag_status), void *data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LIBPLC_GPIO_GPIO_H */

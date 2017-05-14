@@ -2,7 +2,7 @@
  * @file
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -24,9 +24,6 @@
 #include "rx.h"
 #include "settings.h"
 
-#define ADC_FILE_CAPTURE "adc.csv"
-#define ADC_FILE_CAPTURE_DATA "adc_data.csv"
-
 #define ADC_BUFFER_COUNT 2048
 #define FILE_DATA_SAMPLES 100
 
@@ -47,6 +44,7 @@ struct rx
 	uint8_t *buffer_data;
 	uint32_t buffer_data_count;
 	char *file_rx_path;
+	int rx_data_detected;
 	sample_rx_t *buffer_to_file_rx;
 	sample_rx_t *buffer_to_file_rx_cur;
 	uint32_t buffer_to_file_rx_remaining;
@@ -57,13 +55,13 @@ struct rx
 };
 
 // Enums-to-text mappings
-const char *rx_mode_enum_text[rx_mode_COUNT] =
-{ "none", "sample_by_sample", "buffer_by_buffer", "kernel_buffering", };
+const char *rx_mode_enum_text[rx_mode_COUNT] = {
+	"none", "sample_by_sample", "buffer_by_buffer", "kernel_buffering", };
 
-const char *demodulation_mode_enum_text[demod_mode_COUNT] =
-{ "none", "real_time", "deferred", };
+const char *demod_mode_enum_text[demod_mode_COUNT] = {
+	"none", "real_time", "deferred", };
 
-struct rx *rx_create(const struct rx_settings *settings, struct monitor *monitor, 
+struct rx *rx_create(const struct rx_settings *settings, struct monitor *monitor,
 		struct plc_leds *leds, struct plc_adc *plc_adc, struct decoder *decoder)
 {
 	struct rx *rx = calloc(1, sizeof(struct rx));
@@ -75,8 +73,8 @@ struct rx *rx_create(const struct rx_settings *settings, struct monitor *monitor
 	rx->plc_adc = plc_adc;
 	rx->decoder = decoder;
 	char *output_dir = plc_application_get_output_abs_dir();
-	asprintf(&rx->file_rx_path, "%s/%s", output_dir, ADC_FILE_CAPTURE);
-	asprintf(&rx->file_data_path, "%s/%s", output_dir, ADC_FILE_CAPTURE_DATA);
+	asprintf(&rx->file_rx_path, "%s/%s", output_dir, settings->samples_filename);
+	asprintf(&rx->file_data_path, "%s/%s", output_dir, settings->data_filename);
 	free(output_dir);
 	switch (settings->rx_mode)
 	{
@@ -119,14 +117,16 @@ static void *thread_adc_rx_buffer(void *arg)
 	return NULL;
 }
 
-static int rx_on_buffer_completed(
-		struct rx *rx, sample_rx_t *samples_buffer, uint32_t samples_buffer_count)
+static int rx_on_buffer_completed(struct rx *rx, sample_rx_t *samples_buffer,
+		uint32_t samples_buffer_count)
 {
 	struct timespec stamp_ini = plc_time_get_hires_stamp();
 	int data_detected = plc_rx_analysis_analyze_buffer(rx->plc_rx_analysis, samples_buffer,
 			samples_buffer_count);
-	monitor_on_buffer_received(rx->monitor, samples_buffer, samples_buffer_count);
 	if (data_detected)
+		rx->rx_data_detected = 1;
+	monitor_on_buffer_received(rx->monitor, samples_buffer, samples_buffer_count);
+	if (rx->rx_data_detected)
 	{
 		if (rx->buffer_to_file_rx_remaining > 0)
 		{
@@ -135,18 +135,24 @@ static int rx_on_buffer_completed(
 					(rx->buffer_to_file_rx_remaining <= rx->adc_buffer_samples) ?
 							rx->buffer_to_file_rx_remaining : rx->adc_buffer_samples;
 			memcpy(rx->buffer_to_file_rx_cur, samples_buffer,
-				samples_to_copy * sizeof(sample_rx_t));
+					samples_to_copy * sizeof(sample_rx_t));
 			rx->buffer_to_file_rx_cur += samples_to_copy;
 			rx->buffer_to_file_rx_remaining -= samples_to_copy;
 			if (rx->buffer_to_file_rx_remaining == 0)
 				log_line("RX file captured");
 		}
-
 		// Demodulation in real-time (if enabled)
 		if (rx->settings.demod_mode == demod_mode_real_time)
 		{
 			uint32_t data_demodulated = decoder_parse_next_samples(rx->decoder, samples_buffer,
 					rx->buffer_data, rx->buffer_data_count);
+			assert(data_demodulated <= rx->buffer_data_count);
+			// Replace non-ASCII chars by points
+			uint8_t *buffer = rx->buffer_data;
+			uint32_t i;
+			for (i = data_demodulated; i > 0; i--, buffer++)
+				if (((*buffer < 0x20) || (*buffer > 0x7F)) && (*buffer != '\n'))
+					*buffer = '.';
 			log_format("%.*s", data_demodulated, rx->buffer_data);
 			if (rx->buffer_to_file_data_remaining)
 			{
@@ -171,27 +177,25 @@ static void rx_on_buffer_completed_wrapper(void *rx, sample_rx_t *samples_buffer
 	plc_leds_set_rx_activity(((struct rx*) rx)->leds, data_detected);
 }
 
-void rx_start_capture(struct rx *rx)
+int rx_start_capture(struct rx *rx)
 {
 	usleep(100000);
 	TRACE(3, "Start capture");
-	rx->rx_samples_per_bit = (float) rx->settings.data_bit_us * plc_adc_get_sampling_frequency()
+	rx->rx_samples_per_bit = (float) rx->settings.bit_width_us * rx->settings.capturing_rate_sps
 			/ 1000000.0;
-	log_format("rx_samples_per_bit=%g\n", rx->rx_samples_per_bit);
-
-	TRACE(3, "Rest analysis");
+	TRACE(3, "rx_samples_per_bit=%g", rx->rx_samples_per_bit);
+	TRACE(3, "Reset analysis");
 	// Initialize analysis
 	plc_rx_analysis_reset(rx->plc_rx_analysis);
 	TRACE(3, "Configure analysis");
-	plc_rx_analysis_configure(
-			rx->plc_rx_analysis, plc_adc_get_sampling_frequency(), rx->settings.data_bit_us,
-			rx->settings.data_offset, rx->settings.data_hi_threshold_detection);
-
+	plc_rx_analysis_configure(rx->plc_rx_analysis, rx->settings.capturing_rate_sps,
+			rx->settings.bit_width_us, rx->settings.data_offset,
+			rx->settings.data_hi_threshold_detection);
 	TRACE(3, "Checking file");
 	// Delete previous file if exists
 	if (access(rx->file_data_path, F_OK) != -1)
 		unlink(rx->file_data_path);
-
+	rx->rx_data_detected = 0;
 	rx->buffer_to_file_rx_remaining = rx->settings.samples_to_file;
 	if (rx->settings.samples_to_file)
 	{
@@ -201,14 +205,10 @@ void rx_start_capture(struct rx *rx)
 	}
 	rx->buffer_to_file_rx_cur = rx->buffer_to_file_rx;
 	rx->buffer_to_file_data_cur = rx->buffer_to_file_data;
-
 	TRACE(3, "Setting callback");
 	plc_adc_set_rx_buffer_completed_callback(rx->plc_adc, rx_on_buffer_completed_wrapper, rx);
-
 	TRACE(3, "Initiate demodulator");
-	decoder_initialize_demodulator(rx->decoder, rx->adc_buffer_samples,
-			rx->settings.demod_data_hi_threshold, rx->settings.data_offset, rx->rx_samples_per_bit,
-			rx->settings.samples_to_file);
+	decoder_initialize_demodulator(rx->decoder, rx->adc_buffer_samples);
 	rx->buffer_data_count = ceil((float) rx->adc_buffer_samples / rx->rx_samples_per_bit / 8.0);
 	rx->buffer_data = malloc(rx->buffer_data_count);
 	TRACE(3, "plc_adc_start_capture");
@@ -217,8 +217,11 @@ void rx_start_capture(struct rx *rx)
 	case rx_mode_buffer_by_buffer:
 	case rx_mode_kernel_buffering:
 	{
-		plc_adc_start_capture(rx->plc_adc, rx->adc_buffer_samples,
-				(rx->settings.rx_mode == rx_mode_kernel_buffering));
+		int ret = plc_adc_start_capture(rx->plc_adc, rx->adc_buffer_samples,
+				(rx->settings.rx_mode == rx_mode_kernel_buffering),
+				rx->settings.capturing_rate_sps);
+		if (ret < 0)
+			goto error_on_plc_adc_start_capture;
 		break;
 	}
 	case rx_mode_sample_by_sample:
@@ -232,6 +235,24 @@ void rx_start_capture(struct rx *rx)
 		break;
 	}
 	TRACE(3, "Capture started");
+	return 0;
+	// Error management
+	error_on_plc_adc_start_capture: if (rx->buffer_to_file_data)
+	{
+		free(rx->buffer_to_file_data);
+		rx->buffer_to_file_data = NULL;
+	}
+	if (rx->buffer_data)
+	{
+		free(rx->buffer_data);
+		rx->buffer_data = NULL;
+	}
+	if (rx->buffer_to_file_rx)
+	{
+		free(rx->buffer_to_file_rx);
+		rx->buffer_to_file_rx = NULL;
+	}
+	return -1;
 }
 
 void rx_stop_capture(struct rx *rx)
@@ -287,10 +308,14 @@ void rx_stop_capture(struct rx *rx)
 					rx->buffer_to_file_data_cur - rx->buffer_to_file_data, 0);
 			assert(ret >= 0);
 			free(rx->buffer_to_file_data);
+			rx->buffer_to_file_data = NULL;
 		}
 	}
 	if (rx->buffer_data)
+	{
 		free(rx->buffer_data);
+		rx->buffer_data = NULL;
+	}
 	decoder_terminate_demodulator(rx->decoder);
 	if (rx->buffer_to_file_rx)
 	{
@@ -298,6 +323,7 @@ void rx_stop_capture(struct rx *rx)
 				rx->buffer_to_file_rx_cur - rx->buffer_to_file_rx, 0);
 		assert(ret >= 0);
 		free(rx->buffer_to_file_rx);
+		rx->buffer_to_file_rx = NULL;
 	}
 	plc_leds_set_rx_activity(rx->leds, 0);
 }

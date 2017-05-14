@@ -4,13 +4,17 @@
  *			in non-blocking mode
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
 #ifndef LIBPLC_TOOLS_TERMINAL_IO_H
 #define LIBPLC_TOOLS_TERMINAL_IO_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct plc_terminal_io;
 
@@ -37,5 +41,9 @@ int plc_terminal_io_kbhit(struct plc_terminal_io *plc_terminal_io);
  * @return	Character code of the key pressed
  */
 int plc_terminal_io_getchar(struct plc_terminal_io *plc_terminal_io);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LIBPLC_TOOLS_TERMINAL_IO_H */

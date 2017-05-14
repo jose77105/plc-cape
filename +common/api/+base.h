@@ -10,7 +10,7 @@
  *		- As #ATTR_EXTERN to declare the visibility of the API functions
  *
  *	## Tracing helper macros
- *		- As #plc_debug_level, #TRACE, #TRACE1
+ *		- As #plc_debug_level, #TRACE
  *
  *	## _typedefs_ used on DAC and ADC
  *		- As _sample_rx_t_, _sample_tx_t_ for the definition of the type used on TX (DAC) and RX
@@ -26,7 +26,7 @@
  *		- http://stackoverflow.com/questions/3419332/c-preprocessor-stringify-the-result-of-a-macro
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -45,6 +45,10 @@
 #include <stdio.h>		// sprintf
 #include <stdlib.h>		// calloc
 #include <string.h>		// memset
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 //
 // GLOBAL CONSTANT
@@ -152,6 +156,14 @@
  */
 extern int plc_debug_level;
 
+/**
+ * @brief	Trace a message using the current active logger
+ * @param	function_name	The name of the function that is issuing the tracing
+ * @param	format			The message to log either in plain text or with _printf_ format
+ * @param	...				Optional arguments if required by _format_
+ */
+extern void (*plc_trace)(const char *function_name, const char *format, ...);
+
 #ifndef DEBUG
 /**
  * @brief	Macro for tracing
@@ -162,30 +174,23 @@ extern int plc_debug_level;
  *				They will appear in usual debugging sessions
  *			* 3 = maximum tracing, for intensive debugging messages, only shown with extra-verbosity
  *				level. They will appear in bug-finding debugging sessions
- * @param	text Message to be logged
  * @details
  *	The macro is only expanded in the binaries if **DEBUG** is defined\n
+ *	It has a variable number of arguments matching the 'printf' format
  *	The macro relies on two symbols that must be present:
  *	* a function `plc_trace(const char *function_name, const char *format, ...)` in charge of the
  *		logging
  *	* a variable `plc_debug_level` in charge of the verbosity level
  */
-#define TRACE(level, text)
-/// @brief	Like #TRACE but allowing a variable parameter (in _printf_-format)
-#define TRACE1(level, format, arg1)
-/// @brief	Like #TRACE but allowing two variable parameters (in _printf_-format)
-#define TRACE2(level, format, arg1, arg2)
+#define TRACE(level, ...)
 #else
 // NOTE: do..while(0) used for TRACE usage satety. More information on:
 //	http://stackoverflow.com/questions/154136/...
 //		...why-use-apparently-meaningless-do-while-and-if-else-statements-in-c-c-macros
 // An official usage example is also found in the man pages for _timers_:
 //	http://man7.org/linux/man-pages/man2/timer_create.2.html
-#define TRACE(level, text) do { if (level <= plc_debug_level) plc_trace(__func__, text); } while(0)
-#define TRACE1(level, format, arg1) \
-		do { if (level <= plc_debug_level) plc_trace(__func__, format, arg1); } while(0)
-#define TRACE2(level, format, arg1, arg2) \
-		do { if (level <= plc_debug_level) plc_trace(__func__, format, arg1, arg2); } while(0)
+#define TRACE(level, ...) \
+	do { if (level <= plc_debug_level) plc_trace(__func__, __VA_ARGS__); } while(0)
 #endif
 
 //
@@ -204,6 +209,39 @@ typedef uint16_t sample_rx_t;
 typedef uint16_t sample_tx_t;
 typedef uint8_t data_tx_rx_t;
 #define sample_rx_csv_enum csv_u16
+
+// Shared fifo path used to simulate a TX-RX loop
+#define TXRX_SHARED_FIFO_PATH "/tmp/plc-cape-lab-txrx-fifo"
+
+/**
+ * @brief	Logical device used for the transmission of data
+ */
+enum plc_tx_device_enum
+{
+	/// PlcCape board with optimized drivers
+	plc_tx_device_plc_cape = 1,
+	/// PlcCape board with standard drivers
+	plc_tx_device_plc_cape_std_drivers,
+	/// ALSA library
+	plc_tx_device_alsa,
+	/// Internal memory-based fifo
+	plc_tx_device_internal_fifo,
+};
+
+/**
+ * @brief	Logical device used for the reception of data
+ */
+enum plc_rx_device_enum
+{
+	/// ADC of the BBB with optimized drivers
+	plc_rx_device_adc_bbb = 1,
+	/// ADC of the BBB with standard drivers
+	plc_rx_device_adc_bbb_std_drivers,
+	/// ALSA library
+	plc_rx_device_alsa,
+	/// Internal memory-based fifo
+	plc_rx_device_internal_fifo,
+};
 
 //
 // SINGLETONS
@@ -252,5 +290,9 @@ typedef void *(*plugin_api_load_t)(uint32_t *plugin_api_version, uint32_t *plugi
 #define PLUGIN_API_UNLOAD plugin_api_unload
 #define PLUGIN_API_UNLOAD_STRING EXPAND_AND_QUOTE(PLUGIN_API_UNLOAD)
 typedef void (*plugin_api_unload_t)(void *plugin_api);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* COMMON_BASE_H */

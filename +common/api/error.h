@@ -3,13 +3,17 @@
  * @brief	Global interface for error management within the \c plc-cape project
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
 #ifndef COMMON_ERROR_H
 #define COMMON_ERROR_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef PLC_ERROR_API_HANDLE_EXPLICIT_DEF
 typedef void* plc_error_api_h;
@@ -28,5 +32,9 @@ struct plc_error_api {
 	void (*set_error_msg)(plc_error_api_h handle, const char *format, ...);
 	void (*set_error_msg_va)(plc_error_api_h handle, const char *format, va_list args);
 };
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* COMMON_ERROR_H */

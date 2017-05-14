@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+	<!-- interface-requires gtk+ 3.8 -->
+	<object id="plot_widget_settings_dialog" class="GtkDialog">
+		<property name="title" translatable="yes">Plot settings</property>
+		<property name="resizable">False</property>
+		<property name="modal">False</property>
+		<child internal-child="vbox">
+			<object class="GtkBox" id="vbox">
+				<child>
+					<object class="GtkGrid" id="grid">
+						<property name="visible">True</property>
+						<property name="margin">6</property>
+						<property name="row-spacing">12</property>
+						<property name="column-spacing">6</property>
+						<child>
+							<object class="GtkLabel" id="viewerIntervalLabel">
+								<property name="label">Viewer _Interval [ms]:</property>
+								<property name="use-underline">True</property>
+								<property name="mnemonic-widget">viewerIntervalEntry</property>
+							</object>
+							<packing>
+								<property name="left-attach">0</property>
+								<property name="top-attach">0</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkEntry" id="viewerIntervalEntry" />
+							<packing>
+								<property name="left-attach">1</property>
+								<property name="top-attach">0</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkLabel" id="yUnitRangeLabel">
+								<property name="label">Y _Range:</property>
+								<property name="use-underline">True</property>
+								<property name="mnemonic-widget">yUnitRangeEntry</property>
+							</object>
+							<packing>
+								<property name="left-attach">0</property>
+								<property name="top-attach">1</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkEntry" id="yUnitRangeEntry" />
+							<packing>
+								<property name="left-attach">1</property>
+								<property name="top-attach">1</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkLabel" id="yUnitOffsetLabel">
+								<property name="label">Y _Offset:</property>
+								<property name="use-underline">True</property>
+								<property name="mnemonic-widget">yUnitOffsetEntry</property>
+							</object>
+							<packing>
+								<property name="left-attach">0</property>
+								<property name="top-attach">2</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkEntry" id="yUnitOffsetEntry" />
+							<packing>
+								<property name="left-attach">1</property>
+								<property name="top-attach">2</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkLabel" id="fftYRangeNormalizedLabel">
+								<property name="label">FFT normalized Y-Range:</property>
+								<property name="mnemonic-widget">fftYRangeNormalizedEntry</property>
+							</object>
+							<packing>
+								<property name="left-attach">0</property>
+								<property name="top-attach">3</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkEntry" id="fftYRangeNormalizedEntry"/>
+							<packing>
+								<property name="left-attach">1</property>
+								<property name="top-attach">3</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkLabel" id="gridTimeLabel">
+								<property name="label">Grid ti_me [us]:</property>
+								<property name="use-underline">True</property>
+								<property name="mnemonic-widget">gridTimeEntry</property>
+							</object>
+							<packing>
+								<property name="left-attach">0</property>
+								<property name="top-attach">4</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkEntry" id="gridTimeEntry" />
+							<packing>
+								<property name="left-attach">1</property>
+								<property name="top-attach">4</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkLabel" id="gridYUnitLabel">
+								<property name="label">Grid _Y units:</property>
+								<property name="use-underline">True</property>
+								<property name="mnemonic-widget">gridYUnitEntry</property>
+							</object>
+							<packing>
+								<property name="left-attach">0</property>
+								<property name="top-attach">5</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkEntry" id="gridYUnitEntry" />
+							<packing>
+								<property name="left-attach">1</property>
+								<property name="top-attach">5</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkLabel" id="graphTitleLabel">
+								<property name="label">Graph _title:</property>
+								<property name="use-underline">True</property>
+								<property name="mnemonic-widget">graphTitleEntry</property>
+							</object>
+							<packing>
+								<property name="left-attach">0</property>
+								<property name="top-attach">6</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkEntry" id="graphTitleEntry" />
+							<packing>
+								<property name="left-attach">1</property>
+								<property name="top-attach">6</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkButton" id="applyButton">
+								<property name="label">_Apply</property>
+								<property name="use-underline">True</property>
+							</object>
+							<packing>
+								<property name="left-attach">0</property>
+								<property name="top-attach">7</property>
+							</packing>
+						</child>
+						<child>
+							<object class="GtkButton" id="okButton">
+								<property name="use-underline">True</property>
+								<property name="label">O_k</property>
+							</object>
+							<packing>
+								<property name="left-attach">1</property>
+								<property name="top-attach">7</property>
+							</packing>
+						</child>
+					</object>
+				</child>
+			</object>
+		</child>
+	</object>
+</interface>

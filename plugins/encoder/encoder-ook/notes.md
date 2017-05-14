@@ -11,7 +11,6 @@ encoder-ook {#plugin-encoder-ook}
 <tr>
 	<td><b>Purpose</b><td>
 	Encodes data in a simple On-Off-Keying codification
-	Encodes data in a simple On-Off-Keying codification
 <tr>
 	<td><b>Details</b><td>
 <tr>

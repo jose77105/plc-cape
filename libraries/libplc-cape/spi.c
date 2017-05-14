@@ -2,7 +2,7 @@
  * @file
  * 
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include "+common/api/+base.h"
 #include "+common/api/bbb.h"
+#include "afe_commands.h"
 #include "error.h"
 #include "libraries/libplc-gpio/api/gpio.h"
 #include "spi.h"
@@ -40,11 +41,13 @@ struct spi
 	uint32_t speed_cmd;
 	uint16_t delay_cmd;
 	uint8_t bits_dac;
-	uint32_t speed_dac;
+	uint32_t rate_bps;
 	uint16_t delay_dac;
 	struct plc_gpio_pin_out *pin_dac;
 	int spi_fd;
 	int dac_mode;
+	// TODO: Move to a dedicated 'spi_emulation' struct
+	uint8_t emulated_reg[256];
 };
 
 // 'debugfs' driver communication
@@ -153,14 +156,36 @@ static uint8_t spi_debugfs_wait_dma_buffer_sent(int file_debugfs)
 	return buffer_in_dma_index;
 }
 
-// Only 10th first bits are accepted. Remaining 6 bits are ignored
-// Most significant byte corresponds to the "reg" parameter
-// Barrido lineal del DAC en su margen dinámico
-// TODO : Revisar si el truncado se come el 1er. bit ya que con 0xFF, Tou = 1V, y con 0xC0 = 0V
+ATTR_INTERN uint32_t spi_sps_to_bps(float requested_sampling_rate_sps)
+{
+	// Translate sampling_rate to theoretical exact bps
+	float requested_bps = 10.5 / (1.0 / requested_sampling_rate_sps - 165e-9);
+	if (requested_bps < 0)
+		return 0.0;
+	// Process settings when reinitializing the controller to refresh dependent data
+	// SPI DAC valid frequencies = 187.5kHz, 375k, 750k, 1500k, 3M, 6M, 12M...
+	// NOTE: 'ceil' function avoided to minimize dependencies. Trick used instead
+	uint32_t min_bps = (uint32_t)requested_bps;
+	if (requested_bps > (float)min_bps) min_bps++;
+	uint32_t closest_accepted_bps;
+	uint32_t next_bps = 12000000;
+	do {
+		closest_accepted_bps = next_bps;
+		next_bps = closest_accepted_bps/2;
+	} while (min_bps <= next_bps);
+	return closest_accepted_bps;
+}
+
+ATTR_INTERN float spi_bps_to_sps(uint32_t spi_rate_bps)
+{
+	// 10-data-bits + 0.5 clock between words (TCS) + 165ns CS pulse =
+	//	10.5 proportional factor + 165ns fixed time
+	return 1.0 / (10.5 / spi_rate_bps + 165e-9);
+}
 
 // TODO: Refactor. Move 'plc_cape_emulation' from global to parameter
 extern int plc_cape_emulation;
-ATTR_EXTERN struct spi *spi_create(int plc_driver, struct plc_gpio *plc_gpio)
+ATTR_INTERN struct spi *spi_create(int plc_driver, struct plc_gpio *plc_gpio)
 {
 	struct spi *spi = (struct spi*) calloc(1, sizeof(struct spi));
 	if (!plc_cape_emulation)
@@ -176,16 +201,10 @@ ATTR_EXTERN struct spi *spi_create(int plc_driver, struct plc_gpio *plc_gpio)
 		spi_debugfs_reset(spi->file_debugfs);
 		spi_debugfs_send_pid(spi->file_debugfs);
 	}
-
 	spi->pin_dac = plc_gpio_pin_out_create(plc_gpio, GPIO_DAC_BANK, GPIO_DAC_MASK);
 	spi->mode = SPI_MODE_0;
 	spi->lsb = 0;
 	spi->bits_cmd = 16;
-	// TODO: Revisar que 'speed_cmd == 20000' es una buena velocidad -> En realidad se convierte a
-	//	'11718'
-	// The real speed of the SPI is the nearest accepted one. See pags 4777, 4781 & 4865 of
-	//	'AM335x_TechnicalManual_spruh73l.pdf' for more info
-	// Note also that AFE ADC uses 10-data-bits + 1-cs-bit for DAC = 11 bits
 	spi->speed_cmd = 20000;
 	spi->delay_cmd = 0;
 	// Two solutions for bit_dac:
@@ -195,10 +214,11 @@ ATTR_EXTERN struct spi *spi_create(int plc_driver, struct plc_gpio *plc_gpio)
 	//		offers the best solution
 	// Note that the AFE understands the end of the symbol when the CS line is toggled
 	spi->bits_dac = 10;
-
 	if (plc_cape_emulation)
+	{
+		spi->emulated_reg[AFEREG_REVISION] = 2;
 		return spi;
-
+	}
 	int ret;
 	spi->spi_fd = open(plc_driver ? device_spi_plc : device_spi, O_RDWR);
 	if (spi->spi_fd < 0)
@@ -210,7 +230,6 @@ ATTR_EXTERN struct spi *spi_create(int plc_driver, struct plc_gpio *plc_gpio)
 		libplc_cape_set_error_msg_errno("Can't open SPI device");
 		return NULL;
 	}
-
 	// SPI & LSB/MSB modes
 	ret = ioctl(spi->spi_fd, SPI_IOC_WR_MODE, &spi->mode);
 	if (ret != -1)
@@ -240,14 +259,12 @@ ATTR_EXTERN struct spi *spi_create(int plc_driver, struct plc_gpio *plc_gpio)
 		libplc_cape_set_error_msg_errno("Can't initialize SPI device");
 		return NULL;
 	}
-
 	// Set command mode as the default one
 	spi_set_dac_mode(spi, 0);
-
 	return spi;
 }
 
-ATTR_EXTERN void spi_release(struct spi *spi)
+ATTR_INTERN void spi_release(struct spi *spi)
 {
 
 	if (!plc_cape_emulation)
@@ -261,23 +278,25 @@ ATTR_EXTERN void spi_release(struct spi *spi)
 	free(spi);
 }
 
-ATTR_EXTERN void spi_configure(struct spi *spi, uint32_t spi_dac_freq, uint16_t spi_dac_delay)
+ATTR_INTERN void spi_configure(struct spi *spi, uint32_t spi_rate_bps, uint16_t spi_delay)
 {
-	// Working tested values for 'speed_dac': 20000 (= 20k), 60k, 200k, 1M, 10M
-	// For 1M it has been seen that measured SPI freq about 750kHz; For 10M SPI freq measured about
-	//	6MHz
-	// In both cases using continuous one-sample-IoControls calls at maximum throughput there is
-	//	about 20us between symbols
-	// This would limit the abs max freq to 1/20us = 50kHz. Considering the symbol time we have
-	//	measured a maximum tx rate of 27000 samples/s for 'speed_dac = 1M' and 40ksps for 10M.
-	// With buffer-based-IoControls we reduce the time between symbols within the buffer to 0.2us
-	//	-> 5MHz
-	spi->speed_dac = spi_dac_freq;
-	spi->delay_dac = spi_dac_delay;
+	spi->rate_bps = spi_rate_bps;
+	spi->delay_dac = spi_delay;
+}
+
+ATTR_INTERN void spi_configure_sps(struct spi *spi, uint32_t sampling_rate_sps)
+{
+	uint32_t spi_rate_bps = spi_sps_to_bps(sampling_rate_sps);
+	spi_configure(spi, spi_rate_bps, 0);
+}
+
+ATTR_INTERN float spi_get_sampling_rate_sps(struct spi *spi)
+{
+	return spi_bps_to_sps(spi->rate_bps);
 }
 
 // POST_CONDITION: pointer returned should be released with 'free'
-ATTR_EXTERN char *spi_get_info(struct spi *spi)
+ATTR_INTERN char *spi_get_info(struct spi *spi)
 {
 	char *info;
 	if (!spi)
@@ -288,7 +307,7 @@ ATTR_EXTERN char *spi_get_info(struct spi *spi)
 	asprintf(&info, "Mode: %d\n"
 			"Bit order: %d\n"
 			"Bits per word: %d\n"
-			"Rate: %d bauds\n", spi->mode, spi->lsb, spi->bits_dac, spi->speed_dac);
+			"Rate: %d bauds\n", spi->mode, spi->lsb, spi->bits_dac, spi->rate_bps);
 	return info;
 }
 
@@ -299,13 +318,11 @@ ATTR_EXTERN char *spi_get_info(struct spi *spi)
 // The driver is a bit faster if 'tr.speed_hz' and 'tr.bits_per_word' are sent as zero (meaning
 //	default value) because avoids forcing the new values for each command/transfer and reverting
 //	back to defaults after them
-ATTR_EXTERN void spi_set_dac_mode(struct spi *spi, int enable)
+ATTR_INTERN void spi_set_dac_mode(struct spi *spi, int enable)
 {
 	spi->dac_mode = enable;
-
 	if (plc_cape_emulation)
 		return;
-
 	int ret;
 	// Bits per word
 	uint8_t bits_per_word = enable ? spi->bits_dac : spi->bits_cmd;
@@ -316,7 +333,7 @@ ATTR_EXTERN void spi_set_dac_mode(struct spi *spi, int enable)
 	assert(ret != -1);
 	assert(bits_per_word_read == bits_per_word);
 	// Baud rate
-	uint32_t speed = enable ? spi->speed_dac : spi->speed_cmd;
+	uint32_t speed = enable ? spi->rate_bps : spi->speed_cmd;
 	ret = ioctl(spi->spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
 	assert(ret != -1);
 	uint32_t speed_read;
@@ -326,7 +343,7 @@ ATTR_EXTERN void spi_set_dac_mode(struct spi *spi, int enable)
 	plc_gpio_pin_out_set(spi->pin_dac, enable);
 }
 
-ATTR_EXTERN void spi_transfer_dac_buffer(struct spi *spi, uint16_t *samples_tx,
+ATTR_INTERN void spi_transfer_dac_buffer(struct spi *spi, uint16_t *samples_tx,
 		int samples_tx_count)
 {
 	// Ensuring that 'dac_mode == 1' allows using the default values for the 'speed_hz' and
@@ -353,31 +370,9 @@ ATTR_EXTERN void spi_transfer_dac_buffer(struct spi *spi, uint16_t *samples_tx,
 	}
 }
 
-/*
- // Another alternative mode for transfering the whole block at once is using 'write'.
- // It has been checked that produces the same results as the 'ioctl' call. For the 'speed_hz'
- //		settings and so
- // it it supposed to use the default values set in 'spi_init' through the corresponding 'ioctl'
- // The limitations are the same as ioctl (e.g. the 'bufsiz == 4096' of spidev_plc)
- void spi_transfer_dac_buffer_using_write(struct spi *spi, uint16_t *samples_tx,
-		int samples_tx_count)
- {
- uint32_t count = samples_tx_count*2;
- uint8_t *tx = (uint8_t*)samples_tx;
- while (count > 0)
- {
- ssize_t bytes_written = write(spi->spi_fd, tx, count);
- if (bytes_written <= 0) pexit("error in SPI transmission");
- tx += bytes_written;
- count -= bytes_written;
- }
- }
- */
-
-ATTR_EXTERN void spi_transfer_dac_sample(struct spi *spi, uint16_t sample)
+ATTR_INTERN void spi_transfer_dac_sample(struct spi *spi, uint16_t sample)
 {
 	assert(spi->dac_mode);
-	// C-style struct initialization (incompatible in C++)
 	struct spi_ioc_transfer tr;
 	memset(&tr, 0, sizeof(tr));
 	tr.tx_buf = (unsigned long) &sample;
@@ -403,7 +398,7 @@ void spi_log_frame(char frame_id, uint8_t *frame, uint32_t frame_count)
 }
 #endif
 
-ATTR_EXTERN void spi_execute_command_fullduplex(struct spi *spi, uint8_t reg, uint8_t value)
+ATTR_INTERN void spi_execute_command_fullduplex(struct spi *spi, uint8_t reg, uint8_t value)
 {
 	assert(!spi->dac_mode);
 	uint8_t tx[] =
@@ -428,7 +423,7 @@ ATTR_EXTERN void spi_execute_command_fullduplex(struct spi *spi, uint8_t reg, ui
 #endif
 }
 
-ATTR_EXTERN void spi_write_command(struct spi *spi, uint8_t reg, uint8_t value)
+ATTR_INTERN void spi_write_command(struct spi *spi, uint8_t reg, uint8_t value)
 {
 	assert(spi->dac_mode == 0);
 	uint8_t buffer[] =
@@ -439,7 +434,12 @@ ATTR_EXTERN void spi_write_command(struct spi *spi, uint8_t reg, uint8_t value)
 	tr.rx_buf = (unsigned long) NULL;
 	tr.len = ARRAY_SIZE(buffer);
 	tr.delay_usecs = spi->delay_cmd;
-	if (!plc_cape_emulation)
+	// TODO: Instead of 'if' make redirection on spi_write & spi_read commands
+	if (plc_cape_emulation)
+	{
+		spi->emulated_reg[reg] = value;
+	}
+	else
 	{
 		int ret = ioctl(spi->spi_fd, SPI_IOC_MESSAGE(1), &tr);
 		if (ret < 1)
@@ -451,7 +451,7 @@ ATTR_EXTERN void spi_write_command(struct spi *spi, uint8_t reg, uint8_t value)
 }
 
 // Command execution in half-duplex mode
-ATTR_EXTERN uint8_t spi_read_command(struct spi *spi, uint8_t reg)
+ATTR_INTERN uint8_t spi_read_command(struct spi *spi, uint8_t reg)
 {
 	assert(spi->dac_mode == 0);
 	uint8_t buffer[] =
@@ -464,7 +464,7 @@ ATTR_EXTERN uint8_t spi_read_command(struct spi *spi, uint8_t reg)
 	tr.tx_buf = (unsigned long) buffer;
 	tr.rx_buf = (unsigned long) NULL;
 	if (plc_cape_emulation)
-		return 0;
+		return spi->emulated_reg[reg];
 	int ret = ioctl(spi->spi_fd, SPI_IOC_MESSAGE(1), &tr);
 	if (ret < 1)
 		libplc_cape_set_error_msg_errno("Can't send spi message");
@@ -485,28 +485,28 @@ ATTR_EXTERN uint8_t spi_read_command(struct spi *spi, uint8_t reg)
 	return buffer[0];
 }
 
-ATTR_EXTERN void spi_allocate_buffers_dma(struct spi *spi, uint16_t *buf1, uint32_t buf1_count,
+ATTR_INTERN void spi_allocate_buffers_dma(struct spi *spi, uint16_t *buf1, uint32_t buf1_count,
 		uint16_t *buf2, uint32_t buf2_count)
 {
 	spi_debugfs_allocate_buffers_dma(spi->file_debugfs, buf1, buf1_count, buf2, buf2_count);
 }
 
-ATTR_EXTERN void spi_release_buffers_dma(struct spi *spi)
+ATTR_INTERN void spi_release_buffers_dma(struct spi *spi)
 {
 	spi_debugfs_release_buffers_dma(spi->file_debugfs);
 }
 
-ATTR_EXTERN void spi_start_dma(struct spi *spi)
+ATTR_INTERN void spi_start_dma(struct spi *spi)
 {
 	spi_debugfs_start_dma(spi->file_debugfs);
 }
 
-ATTR_EXTERN void spi_abort_dma(struct spi *spi)
+ATTR_INTERN void spi_abort_dma(struct spi *spi)
 {
 	spi_debugfs_abort_dma(spi->file_debugfs);
 }
 
-ATTR_EXTERN uint8_t spi_wait_dma_buffer_sent(struct spi *spi)
+ATTR_INTERN uint8_t spi_wait_dma_buffer_sent(struct spi *spi)
 {
 	return spi_debugfs_wait_dma_buffer_sent(spi->file_debugfs);
 }

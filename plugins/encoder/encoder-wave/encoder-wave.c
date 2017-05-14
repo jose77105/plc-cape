@@ -24,7 +24,7 @@
  *		along with plc-cape project.  If not, see <http://www.gnu.org/licenses/>. 
  *
  * @copyright
- *	Copyright (C) 2016 Jose Maria Ortega
+ *	Copyright (C) 2016-2017 Jose Maria Ortega
  * 
  * @endcond
  */
@@ -34,17 +34,41 @@
 #include <math.h>			// sin
 #include <unistd.h>			// read
 #include "+common/api/+base.h"
-#include "+common/api/logger.h"
 #include "+common/api/error.h"
+#include "+common/api/logger.h"
+#include "+common/api/setting.h"
 #define PLUGINS_API_HANDLE_EXPLICIT_DEF
 typedef struct encoder *encoder_api_h;
 #include "plugins/encoder/api/encoder.h"
 
+enum stream_type_enum
+{
+	stream_ramp = 0,
+	stream_triangular,
+	stream_constant,
+	stream_freq_max,
+	stream_freq_max_div2,
+	stream_freq_sweep,
+	stream_freq_sweep_preload,
+	stream_file,
+	stream_bit_padding_per_cycle,
+	stream_am_modulation,
+	stream_freq_sinus,
+	stream_ook_pattern,
+	stream_ook_hi,
+	stream_square,
+	stream_COUNT
+};
+static const char *stream_type_enum_text[stream_COUNT] = {
+	"ramp", "triangular", "constant", "freq_max", "freq_max_div2", "freq_sweep",
+	"freq_sweep_preload", "file", "bit_padding_per_cycle", "am_modulation", "freq_sinus",
+	"ook_pattern", "ook_hi", "square" };
+
 struct encoder_settings
 {
 	enum stream_type_enum stream_type;
-	uint32_t offset;
-	uint32_t range;
+	sample_tx_t offset;
+	sample_tx_t range;
 	float freq;
 	char *filename;
 	uint32_t bit_width_us;
@@ -104,6 +128,7 @@ struct encoder_stream_pattern
 {
 	int symbol_index;
 	uint32_t counter_bit;
+	uint32_t samples_per_bit;
 };
 
 struct encoder_stream_ook_hi
@@ -113,10 +138,24 @@ struct encoder_stream_ook_hi
 	uint8_t bit_index;
 };
 
+struct encoder_stream_sinus
+{
+	float amp;
+	float freq;
+};
+
+struct encoder_stream_square
+{
+	sample_tx_t lo_level;
+	sample_tx_t hi_level;
+	float ratio_cycle_delta;
+	float ratio_cycle;
+};
+
 struct encoder
 {
 	struct encoder_settings settings;
-	float freq_dac_sps;
+	float sampling_rate_sps;
 	uint32_t counter;
 	union
 	{
@@ -128,6 +167,8 @@ struct encoder
 		struct encoder_stream_am stream_am;
 		struct encoder_stream_pattern stream_ook_pattern;
 		struct encoder_stream_ook_hi stream_ook_hi;
+		struct encoder_stream_sinus stream_sinus;
+		struct encoder_stream_square stream_square;
 	};
 };
 
@@ -172,7 +213,12 @@ void encoder_release(struct encoder *encoder)
 static void encoder_set_defaults(struct encoder *encoder)
 {
 	memset(encoder, 0, sizeof(*encoder));
-	encoder->freq_dac_sps = 1000;
+	encoder->settings.stream_type = stream_freq_sinus;
+	encoder->settings.offset = 512;
+	encoder->settings.range = 256;
+	encoder->settings.freq = 2000;
+	encoder->sampling_rate_sps = 100000;
+	encoder->settings.bit_width_us = 1000;
 }
 
 static void encoder_release_resources(struct encoder *encoder)
@@ -199,44 +245,77 @@ static void encoder_release_resources(struct encoder *encoder)
 	}
 }
 
-// TODO: Instead of returning 'int' return an object to be passed to 'set_setting'
-//	This ensures proper locking
+struct plc_setting_extra_data stream_type_captions = {
+	plc_setting_extra_data_enum_captions, {
+		.enum_captions.captions = stream_type_enum_text, .enum_captions.captions_count =
+				stream_COUNT } };
+
+const struct plc_setting_definition accepted_settings[] = {
+	{
+		"sampling_rate_sps", plc_setting_float, "Sampling rate [sps]", {
+			.f = 100000.0f }, 0 }, {
+		"stream_type", plc_setting_enum, "Stream type", {
+			.u32 = stream_freq_sinus }, 1, &stream_type_captions }, {
+		"offset", plc_setting_u16, "Offset", {
+			.u16 = 500 }, 0 }, {
+		"range", plc_setting_u16, "Range", {
+			.u16 = 400 }, 0 }, {
+		"freq", plc_setting_float, "Frequency", {
+			.f = 2000.0f }, 0 }, {
+		"filename", plc_setting_string, "Filename", {
+			.s = "spi.bin" }, 0 }, {
+		"bit_width_us", plc_setting_u32, "Bit Width [us]", {
+			.u32 = 1000 }, 0 } };
+
+const struct plc_setting_definition *encoder_get_accepted_settings(struct encoder *encoder,
+		uint32_t *accepted_settings_count)
+{
+	*accepted_settings_count = ARRAY_SIZE(accepted_settings);
+	return accepted_settings;
+}
+
 int encoder_begin_settings(struct encoder *encoder)
 {
 	encoder_release_resources(encoder);
 	encoder_set_defaults(encoder);
-	return 1;
+	return 0;
 }
 
-int encoder_set_setting(struct encoder *encoder, enum encoder_setting_enum setting,
-		const void *data)
+int encoder_set_setting(struct encoder *encoder, const char *identifier,
+		union plc_setting_data data)
 {
-	switch (setting)
+	if (strcmp(identifier, "sampling_rate_sps") == 0)
 	{
-	case encoder_setting_freq_dac_sps:
-		encoder->freq_dac_sps = *(float*) data;
-		break;
-	case encoder_setting_stream_type:
-		encoder->settings.stream_type = (enum stream_type_enum) data;
-		break;
-	case encoder_setting_offset:
-		encoder->settings.offset = (uint32_t) data;
-		break;
-	case encoder_setting_range:
-		if ((uint32_t) data % 2 != 0)
-			return set_error_msg("Range must be an even value");
-		encoder->settings.range = (uint32_t) data;
-		break;
-	case encoder_setting_freq:
-		encoder->settings.freq = *(float*) data;
-		break;
-	case encoder_setting_filename:
-		encoder->settings.filename = strdup((const char*) data);
-		break;
-	case encoder_setting_bit_width_us:
-		encoder->settings.bit_width_us = (uint32_t) data;
-		break;
-	default:
+		encoder->sampling_rate_sps = data.f;
+	}
+	else if (strcmp(identifier, "stream_type") == 0)
+	{
+		encoder->settings.stream_type = data.u32;
+	}
+	else if (strcmp(identifier, "offset") == 0)
+	{
+		encoder->settings.offset = data.u16;
+	}
+	else if (strcmp(identifier, "range") == 0)
+	{
+		encoder->settings.range = data.u16;
+	}
+	else if (strcmp(identifier, "freq") == 0)
+	{
+		encoder->settings.freq = data.f;
+	}
+	else if (strcmp(identifier, "filename") == 0)
+	{
+		if (encoder->settings.filename)
+			free(encoder->settings.filename);
+		encoder->settings.filename = strdup(data.s);
+	}
+	else if (strcmp(identifier, "bit_width_us") == 0)
+	{
+		encoder->settings.bit_width_us = data.u32;
+	}
+	else
+	{
 		return set_error_msg("Unknown setting");
 	}
 	return 0;
@@ -279,6 +358,20 @@ void encoder_reset(struct encoder *encoder)
 		encoder->stream_ook_hi.message_index = 0;
 		encoder->stream_ook_hi.bit_index = 0xFF;
 		break;
+	case stream_freq_sinus:
+		// TODO: To be sure that resulting sample is within the limits, 'encoder->settings.range-1'
+		//	is used. Improvement: use the whole range
+		encoder->stream_sinus.amp = (encoder->settings.range - 1) / 2;
+		encoder->stream_sinus.freq = 2.0 * M_PI * encoder->settings.freq
+				/ encoder->sampling_rate_sps;
+		break;
+	case stream_square:
+		encoder->stream_square.lo_level = encoder->settings.offset - encoder->settings.range / 2;
+		encoder->stream_square.hi_level = encoder->stream_square.lo_level + encoder->settings.range;
+		encoder->stream_square.ratio_cycle_delta = encoder->settings.freq
+				/ encoder->sampling_rate_sps;
+		encoder->stream_square.ratio_cycle = 0;
+		break;
 	default:
 		break;
 	}
@@ -297,7 +390,7 @@ int encoder_end_settings(struct encoder *encoder)
 		break;
 	case stream_ramp:
 		encoder->stream_ramp.value_max = encoder->settings.offset + encoder->settings.range / 2 - 1;
-		encoder->stream_ramp.value_delta = encoder->settings.freq / encoder->freq_dac_sps
+		encoder->stream_ramp.value_delta = encoder->settings.freq / encoder->sampling_rate_sps
 				* ((float) (encoder->settings.range - 1));
 		break;
 	case stream_triangular:
@@ -305,7 +398,7 @@ int encoder_end_settings(struct encoder *encoder)
 				- encoder->settings.range / 2;
 		encoder->stream_triangular.value_max = encoder->settings.offset
 				+ encoder->settings.range / 2 - 1;
-		encoder->stream_triangular.value_delta = encoder->settings.freq / encoder->freq_dac_sps
+		encoder->stream_triangular.value_delta = encoder->settings.freq / encoder->sampling_rate_sps
 				* ((float) (encoder->settings.range - 1)) * 2;
 		break;
 	case stream_freq_sweep:
@@ -313,15 +406,14 @@ int encoder_end_settings(struct encoder *encoder)
 	{
 		static const uint32_t iterations = 20;
 		// TODO: Make 'freq_ini' and 'freq_end' configurable
-		// static const float iteration_duration_seconds = .05;
 		static const float iteration_duration_seconds = 0.5;
 		// For sweep based on center frequency
-		//	float freq_mid = 2.0*M_PI*encoder->settings.freq/encoder->freq_dac_sps;
+		//	float freq_mid = 2.0*M_PI*encoder->settings.freq/encoder->sampling_rate_sps;
 		//	encoder->stream_sweep.freq_ini = freq_mid*0.5;
 		//	float freq_end = freq_mid*1.5;
 		// Sweep using 'current freq' as 'initial freq' and 'ending freq' based on maximum
 		encoder->stream_sweep.freq_ini = 2.0 * M_PI * encoder->settings.freq
-				/ encoder->freq_dac_sps;
+				/ encoder->sampling_rate_sps;
 		float freq_end = 0.6 * M_PI;
 		encoder->stream_sweep.freq_delta = (freq_end - encoder->stream_sweep.freq_ini)
 				/ (float) iterations;
@@ -329,8 +421,7 @@ int encoder_end_settings(struct encoder *encoder)
 		encoder->stream_sweep.amp = round((encoder->settings.range - 1) / 2.0);
 		encoder->stream_sweep.iterations = iterations;
 		encoder->stream_sweep.iteration_samples = round(
-				encoder->freq_dac_sps * iteration_duration_seconds);
-		//encoder->stream_sweep.freq_delta *= 0.2;
+				encoder->sampling_rate_sps * iteration_duration_seconds);
 		if (encoder->settings.stream_type == stream_freq_sweep_preload)
 		{
 			encoder->stream_sweep.iterations_cycle = malloc(
@@ -340,10 +431,10 @@ int encoder_end_settings(struct encoder *encoder)
 			for (iteration = 0; iteration < iterations;
 					iteration++, freq += encoder->stream_sweep.freq_delta)
 			{
-				//if (iteration & 1) freq = encoder->stream_sweep.freq_ini;
-				//else freq = freq_end;
-				// TODO: Calculate the best repetitive period
-				//	Now just a cycle but sometimes many cycles may be better for more accuracy
+				// TODO: Calculate a suitable buffer length to accomodate several periods
+				//	('cycle_length') in order to minimize the level gap between iterations (as done
+				//	in 'plc-cape-freq-response')
+				//	Here, for simplicity, use just one 'cycle_length'
 				uint32_t cycle_length = round(2.0 * M_PI / freq);
 				assert(cycle_length > 0);
 				encoder->stream_sweep.iterations_cycle[iteration].length = cycle_length;
@@ -352,19 +443,16 @@ int encoder_end_settings(struct encoder *encoder)
 				for (i = 0; i < cycle_length; i++)
 					data[i] = encoder->stream_sweep.offset
 							+ encoder->stream_sweep.amp * sin(freq * i);
-				/* TODO: REMOVE. Just for testing
-				 for (i = 0; i < cycle_length; i++)
-				 data[i] = encoder->stream_sweep.offset;
-
-				 if (i&1)
-				 data[i] = encoder->stream_sweep.offset+encoder->stream_sweep.amp;
-				 else
-				 data[i] = encoder->stream_sweep.offset-encoder->stream_sweep.amp;
-				 */
 				encoder->stream_sweep.iterations_cycle[iteration].data = data;
 			}
 		}
+		break;
 	}
+	case stream_ook_pattern:
+		encoder->stream_ook_pattern.samples_per_bit = round(
+				encoder->sampling_rate_sps * (float) encoder->settings.bit_width_us / 1000000.0);
+		if (encoder->stream_ook_pattern.samples_per_bit == 0)
+			return set_error_msg("Bit width must be greater than 1 us");
 		break;
 	default:
 		break;
@@ -409,13 +497,11 @@ void encoder_prepare_next_samples(struct encoder *encoder, sample_tx_t *buffer,
 	}
 	case stream_freq_sinus:
 	{
-		// TODO: To be sure that resulting sample is within the limits
-		//	'encoder->settings.range-1' is used. Improvement: use the whole range
-		float amp = (encoder->settings.range - 1) / 2;
-		float freq = 2.0 * M_PI * (float) encoder->settings.freq / encoder->freq_dac_sps;
 		for (i = 0; i < buffer_count; i++, encoder->counter++)
 			buffer[i] = (sample_tx_t) round(
-					(float) encoder->settings.offset + amp * sin(freq * encoder->counter));
+					(float) encoder->settings.offset
+							+ encoder->stream_sinus.amp
+									* sin(encoder->stream_sinus.freq * encoder->counter));
 		break;
 	}
 	case stream_ramp:
@@ -424,12 +510,13 @@ void encoder_prepare_next_samples(struct encoder *encoder, sample_tx_t *buffer,
 		{
 			if (encoder->stream_ramp.value_last >= encoder->stream_ramp.value_max)
 				encoder->stream_ramp.value_last -= encoder->settings.range;
-			buffer[i] = (sample_tx_t) round(encoder->stream_ramp.value_last);
+			sample_tx_t n = (sample_tx_t) round(encoder->stream_ramp.value_last);
+			buffer[i] = n;
 		}
 		break;
 	case stream_triangular:
-		for (i = 0; i < buffer_count; i++,
-				encoder->stream_triangular.value_last += encoder->stream_triangular.value_delta)
+		for (i = 0; i < buffer_count;
+				i++, encoder->stream_triangular.value_last += encoder->stream_triangular.value_delta)
 		{
 			if (((encoder->stream_triangular.value_delta > 0.0)
 					&& (encoder->stream_triangular.value_last
@@ -438,7 +525,7 @@ void encoder_prepare_next_samples(struct encoder *encoder, sample_tx_t *buffer,
 							&& (encoder->stream_triangular.value_last
 									< encoder->stream_triangular.value_min)))
 			{
-				// TODO: Calculate the exact value on delta toggling (linear interpolation)
+				// TODO: Calculate the exact value on delta toggling using linear interpolation
 				encoder->stream_triangular.value_last -= encoder->stream_triangular.value_delta;
 				encoder->stream_triangular.value_delta = -encoder->stream_triangular.value_delta;
 			}
@@ -482,7 +569,7 @@ void encoder_prepare_next_samples(struct encoder *encoder, sample_tx_t *buffer,
 	case stream_freq_sweep:
 	case stream_freq_sweep_preload:
 	{
-		// Alias to simplify reading: 'p' meaning 'parameters'
+		// Alias to simplify the reading: 'p' means 'parameters'
 		struct encoder_stream_sweep *p = &encoder->stream_sweep;
 		if (encoder->settings.stream_type == stream_freq_sweep_preload)
 		{
@@ -527,7 +614,7 @@ void encoder_prepare_next_samples(struct encoder *encoder, sample_tx_t *buffer,
 	case stream_am_modulation:
 	{
 		float amp = encoder->stream_am.sample * (encoder->settings.range - 1) / 2;
-		float freq = 2.0 * M_PI * encoder->settings.freq / encoder->freq_dac_sps;
+		float freq = 2.0 * M_PI * encoder->settings.freq / encoder->sampling_rate_sps;
 		for (i = 0; i < buffer_count; i++, encoder->counter++)
 			buffer[i] = (sample_tx_t) floor(
 					encoder->settings.offset + amp * cos(freq * encoder->counter) + .5);
@@ -538,26 +625,29 @@ void encoder_prepare_next_samples(struct encoder *encoder, sample_tx_t *buffer,
 	}
 	case stream_ook_pattern:
 	{
-		static const uint8_t pattern[] =
-		{ 1, 0, 1, 0, 1, 1, 1, 0 };
-		uint32_t samples_per_bit = round(
-				encoder->freq_dac_sps * (float) encoder->settings.bit_width_us / 1000000.0);
+		static const uint8_t pattern[] = {
+			1, 0, 1, 0, 1, 1, 1, 0 };
 		// TODO: To be sure that resulting sample is within the limits
 		//	'encoder->settings.range-1' is used. Improvement: use the whole range
 		float amp = (encoder->settings.range - 1) / 2;
-		float freq = 2.0 * M_PI * encoder->settings.freq / encoder->freq_dac_sps;
+		float freq = 2.0 * M_PI * encoder->settings.freq / encoder->sampling_rate_sps;
 		for (i = 0; i < buffer_count; i++)
 		{
 			if (pattern[encoder->stream_ook_pattern.symbol_index])
-				buffer[i] = (sample_tx_t) round(encoder->settings.offset + amp * sin(
-						freq * (encoder->counter - encoder->stream_ook_pattern.counter_bit)));
+				buffer[i] =
+						(sample_tx_t) round(
+								encoder->settings.offset
+										+ amp
+												* sin(
+														freq
+																* (encoder->counter
+																		- encoder->stream_ook_pattern.counter_bit)));
 			else
 				buffer[i] = (sample_tx_t) round(encoder->settings.offset);
 			encoder->counter++;
-			if ((encoder->counter % samples_per_bit) == 0)
+			if ((encoder->counter % encoder->stream_ook_pattern.samples_per_bit) == 0)
 			{
 				encoder->stream_ook_pattern.symbol_index++;
-				// 'encoder->counter' to 0 to reset frequency phase per symbol
 				encoder->stream_ook_pattern.counter_bit = encoder->counter;
 				if (encoder->stream_ook_pattern.symbol_index >= ARRAY_SIZE(pattern))
 					encoder->stream_ook_pattern.symbol_index = 0;
@@ -570,9 +660,9 @@ void encoder_prepare_next_samples(struct encoder *encoder, sample_tx_t *buffer,
 		// Pattern: 1 start-bit + 'Hi' + 10 inactive bits
 		static const char message[] = "H\0\0\0i\0\0\0\0\0\0\0\0\0\0";
 		uint32_t samples_per_bit = round(
-				encoder->freq_dac_sps * (float) encoder->settings.bit_width_us / 1000000.0);
+				encoder->sampling_rate_sps * (float) encoder->settings.bit_width_us / 1000000.0);
 		float amp = (encoder->settings.range - 1) / 2;
-		float freq = 2.0 * M_PI * encoder->settings.freq / encoder->freq_dac_sps;
+		float freq = 2.0 * M_PI * encoder->settings.freq / encoder->sampling_rate_sps;
 		for (i = 0; i < buffer_count; i++)
 		{
 			if ((message[encoder->stream_ook_hi.message_index] != 0)
@@ -580,8 +670,14 @@ void encoder_prepare_next_samples(struct encoder *encoder, sample_tx_t *buffer,
 							|| ((message[encoder->stream_ook_hi.message_index]
 									<< encoder->stream_ook_hi.bit_index) & 0x80)))
 			{
-				buffer[i] = (sample_tx_t) round(encoder->settings.offset + amp * sin(
-						freq * (encoder->counter - encoder->stream_ook_hi.counter_bit)));
+				buffer[i] =
+						(sample_tx_t) round(
+								encoder->settings.offset
+										+ amp
+												* sin(
+														freq
+																* (encoder->counter
+																		- encoder->stream_ook_hi.counter_bit)));
 			}
 			else
 			{
@@ -597,13 +693,22 @@ void encoder_prepare_next_samples(struct encoder *encoder, sample_tx_t *buffer,
 					if (++encoder->stream_ook_hi.message_index == ARRAY_SIZE(message) - 1)
 						encoder->stream_ook_hi.message_index = 0;
 				}
-				// TODO: To revise if resetting frequency phase
-				// 'encoder->counter' to 0 to reset frequency phase per symbol.
 				encoder->stream_ook_hi.counter_bit = encoder->counter;
 			}
 		}
 		break;
 	}
+	case stream_square:
+		for (i = 0; i < buffer_count;
+				i++, encoder->stream_square.ratio_cycle += encoder->stream_square.ratio_cycle_delta)
+		{
+			if (encoder->stream_square.ratio_cycle >= 1.0)
+				encoder->stream_square.ratio_cycle -= 1.0;
+			buffer[i] =
+					(encoder->stream_square.ratio_cycle >= .5) ?
+							encoder->stream_square.hi_level : encoder->stream_square.lo_level;
+		}
+		break;
 	default:
 		assert(0);
 		break;
@@ -617,22 +722,23 @@ ATTR_EXTERN void PLUGIN_API_SET_SINGLETON_PROVIDER(singletons_provider_get_t cal
 	singletons_provider_handle = handle;
 	// Ask for the required callbacks
 	uint32_t version;
-	singletons_provider_get(singletons_provider_handle,
-			singleton_id_error, (void**) &plc_error_api, &error_ctrl_handle, &version);
+	singletons_provider_get(singletons_provider_handle, singleton_id_error, (void**) &plc_error_api,
+			&error_ctrl_handle, &version);
 	assert(!plc_error_api || (version >= 1));
-	singletons_provider_get(singletons_provider_handle,
-			singleton_id_logger, (void**) &logger_api, &logger_handle, &version);
+	singletons_provider_get(singletons_provider_handle, singleton_id_logger, (void**) &logger_api,
+			&logger_handle, &version);
 	assert(!logger_api || (version >= 1));
 }
 
 ATTR_EXTERN void *PLUGIN_API_LOAD(uint32_t *plugin_api_version, uint32_t *plugin_api_size)
 {
-	CHECK_INTERFACE_MEMBERS_COUNT(encoder_api, 7);
+	CHECK_INTERFACE_MEMBERS_COUNT(encoder_api, 8);
 	*plugin_api_version = 1;
 	*plugin_api_size = sizeof(struct encoder_api);
 	struct encoder_api *encoder_api = calloc(1, *plugin_api_size);
 	encoder_api->create = encoder_create;
 	encoder_api->release = encoder_release;
+	encoder_api->get_accepted_settings = encoder_get_accepted_settings;
 	encoder_api->begin_settings = encoder_begin_settings;
 	encoder_api->set_setting = encoder_set_setting;
 	encoder_api->end_settings = encoder_end_settings;

@@ -2,117 +2,73 @@
  * @file
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
-#define _GNU_SOURCE		// Required for 'asprintf' declaration
-#include <ctype.h>		// isprint
-#include <getopt.h>
+#define _GNU_SOURCE				// Required for 'asprintf' declaration
 #include "+common/api/+base.h"
+#include "+common/api/bbb.h"	// ADC_MAX_CAPTURE_RATE_SPS
 #include "common.h"
 #include "encoder.h"
+#include "decoder.h"
 #include "libraries/libplc-cape/api/afe.h"
 #include "settings.h"
 
-#define UI_PLUGIN_NAME_DEFAULT "ui-ncurses"
 #define DATA_BIT_US_DEFAULT 1000
-#define SPI_DAC_FREQ_HZ_DEFAULT 1500000
-#define SAMPLES_FREQ_HZ_DEFAULT 2000
+#define SAMPLING_FREQ_SPS_DEFAULT 100000.0
 #define SPI_DAC_DELAY_US_DEFAULT 0
 #define TX_BUFFERS_LEN_DEFAULT 1024
-#define SPI_FILE_SOURCE "spi.bin"
-#define MESSAGE_TO_SEND "This is PlcCape. Hello!\n"
-// #define MESSAGE_TO_SEND "Hello!\n"
-// #define MESSAGE_TO_SEND "ABC..XYZ abc..xyz 0123456789 Hello!\n"
+#define RX_SAMPLES_FILENAME "adc.csv"
+#define RX_DATA_FILENAME "adc_data.csv"
 
-float freq_dac_sps;
+const char *operating_mode_enum_text[operating_mode_COUNT] = {
+	"none", "tx_dac", "tx_dac_txpga_txfilter", "tx_dac_txpga_txfilter_pa",
+	"tx_dac_txpga_txfilter_pa_rx", "calib_dac_txpga", "calib_dac_txpga_txfilter",
+	"calib_dac_txpga_rxpga1_rxfilter_rxpag2", "rx", };
 
-// '--help' message
-// NOTE: When modifying this section update 'notes.md'
-static const char usage_message[] =
-	"Usage: plc-cape-lab [OPTION]...\n"
-	"\"Laboratory\" to experiment with the PlcCape board\n\n"
-	"  -A:MODE       Select ADC receiving mode\n"
-	"  -d            Forces the application to use the standard drivers\n"
-	"  -D:INTERVAL   Max duration for the test [ms]\n"
-	"  -F:BPS        SPI bit rate [bps]\n"
-	"  -H:FREQ       Signal frequency [Hz]\n"
-	"  -I:INTERVAL   Repetitive test interval [ms]\n"
-	"  -L:DELAY      Samples delay [us]\n"
-	"  -N:SIZE       Buffer size [samples]\n"
-	"  -O:OFFSET     Signal offset [DAC value]\n"
-	"  -P:PROFILE    Select a predefined profile\n"
-	"  -R:RANGE      Signal range [DAC value]\n"
-	"  -S:MODE       SPI transmitting mode\n"
-	"  -T:MODE       Operating mode\n"
-	"  -U:NAME       UI plugin name (without extension)\n"
-	"  -W:SAMPLES    Received samples to be stored in a file\n"
-	"  -x            Auto start\n"
-	"  -Y:TYPE       Stream type\n"
-	"     --help     display this help and exit\n\n"
-	"For the arguments requiring an index from a list of options you can get more\n"
-	"information specifiying the parameter followed by just a colon\n";
-
-const char *operating_mode_enum_text[operating_mode_COUNT] =
-{ "none", "tx_dac", "tx_dac_txpga_txfilter", "tx_dac_txpga_txfilter_pa",
-		"tx_dac_txpga_txfilter_pa_rx", "calib_dac_txpga", "calib_dac_txpga_txfilter",
-		"calib_dac_txpga_rxpga1_rxfilter_rxpag2", "rx", };
-
-const char *settings_get_usage_message(void)
+static void settings_release_resources(struct settings *settings)
 {
-	return usage_message;
+	if (settings->configuration_profile)
+	{
+		free(settings->configuration_profile);
+		settings->configuration_profile = NULL;
+	}
+	if (settings->rx.samples_filename)
+	{
+		free(settings->rx.samples_filename);
+		settings->rx.samples_filename = NULL;
+	}
+	if (settings->rx.data_filename)
+	{
+		free(settings->rx.data_filename);
+		settings->rx.data_filename = NULL;
+	}
+}
+
+void settings_set_defaults(struct settings *settings)
+{
+	settings_release_resources(settings);
+	memset(settings, 0, sizeof(*settings));
+	settings->operating_mode = operating_mode_none;
+	settings->bit_width_us = DATA_BIT_US_DEFAULT;
+	settings->tx.sampling_rate_sps = SAMPLING_FREQ_SPS_DEFAULT;
+	settings->tx.samples_delay_us = SPI_DAC_DELAY_US_DEFAULT;
+	settings->tx.tx_buffers_len = TX_BUFFERS_LEN_DEFAULT;
+	settings->tx.tx_mode = spi_tx_mode_none;
+	settings->rx.rx_mode = rx_mode_none;
+	settings->rx.sampling_rate_sps = ADC_MAX_CAPTURE_RATE_SPS;
+	settings->rx.samples_filename = strdup(RX_SAMPLES_FILENAME);
+	settings->rx.data_filename = strdup(RX_DATA_FILENAME);
+	settings->monitor_profile = monitor_profile_buffers_processed;
 }
 
 struct settings *settings_create(void)
 {
 	struct settings *settings = (struct settings*) calloc(1, sizeof(struct settings));
-	settings->ui_plugin_name = strdup(UI_PLUGIN_NAME_DEFAULT);
-	settings->operating_mode = operating_mode_none;
-	settings->data_bit_us = DATA_BIT_US_DEFAULT;
-	settings->tx.freq_bps = SPI_DAC_FREQ_HZ_DEFAULT;
-	settings->tx.samples_delay_us = SPI_DAC_DELAY_US_DEFAULT;
-	settings->tx.stream_type = stream_ramp;
-	settings->tx.tx_buffers_len = TX_BUFFERS_LEN_DEFAULT;
-	settings->tx.samples_offset = DAC_RANGE / 2;
-	settings->tx.samples_range = DAC_RANGE / 4;
-	settings->tx.samples_freq = SAMPLES_FREQ_HZ_DEFAULT;
-	settings->tx.dac_filename = strdup(SPI_FILE_SOURCE);
-	settings->tx.message_to_send = strdup(MESSAGE_TO_SEND);
-	settings->tx.tx_mode = spi_tx_mode_none;
-	settings->rx.rx_mode = rx_mode_none;
-	settings->configuration_profile = cfg_none;
-	settings->monitor_profile = monitor_profile_buffers_processed;
+	settings_set_defaults(settings);
 	return settings;
-}
-
-void settings_release_resources(struct settings *settings)
-{
-	if (settings->ui_plugin_name)
-	{
-		free(settings->ui_plugin_name);
-		settings->ui_plugin_name = NULL;
-	}
-	if (settings->tx.dac_filename)
-	{
-		free(settings->tx.dac_filename);
-		settings->tx.dac_filename = NULL;
-	}
-	if (settings->tx.message_to_send)
-	{
-		free(settings->tx.message_to_send);
-		settings->tx.message_to_send = NULL;
-	}
-}
-
-void settings_copy_in_initialized(struct settings *settings, const struct settings *settings_src)
-{
-	assert((settings->tx.dac_filename == NULL) && (settings->tx.message_to_send == NULL));
-	*settings = *settings_src;
-	settings->ui_plugin_name = strdup(settings_src->ui_plugin_name);
-	settings->tx.dac_filename = strdup(settings_src->tx.dac_filename);
-	settings->tx.message_to_send = strdup(settings_src->tx.message_to_send);
 }
 
 void settings_release(struct settings *settings)
@@ -121,218 +77,204 @@ void settings_release(struct settings *settings)
 	free(settings);
 }
 
-// POST_CONDITION: Use 'settings_release' to release the object when no longer required
-struct settings *settings_clone(const struct settings *settings)
+static char *get_settings_list_info(const struct setting_linked_list_item *settings)
 {
-	struct settings *settings_cloned = (struct settings*) calloc(1, sizeof(*settings_cloned));
-	settings_copy_in_initialized(settings_cloned, settings);
-	return settings_cloned;
-}
-
-void settings_copy(struct settings *settings, const struct settings *settings_src)
-{
-	settings_release_resources(settings);
-	settings_copy_in_initialized(settings, settings_src);
-	settings_update(settings);
-}
-
-int set_enum_value_with_checking(const char *arg, int *enum_value, const char *error_description,
-		const char **enum_options_text, int enum_options_count, char **error_msg)
-{
-	static const char *undefined_text = "Undefined";
-	if ((arg[0] == ':') && (arg[1] != '\0'))
+	char *info = strdup("");
+	const struct setting_linked_list_item *list_item = settings;
+	while (list_item != NULL)
 	{
-		*enum_value = atoi(optarg + 1);
-		if ((*enum_value >= 0) && (*enum_value < enum_options_count))
-			return 1;
+		char *setting_value_text = plc_setting_linked_data_to_text(&list_item->setting);
+		// TODO: Use the setting description instead of the identifier, when possible
+		char *info_new;
+		asprintf(&info_new, "%s %s:%s\n", info, list_item->setting.definition->identifier,
+				setting_value_text);
+		free(info);
+		info = info_new;
+		list_item = list_item->next;
 	}
-	const char *available_options = "Available options:\n";
-	// First se calculate the required length for the whole string (+1 for '\n')
-	int text_len = strlen(error_description) + 1 + strlen(available_options);
-	int n, option_digits = 1, next_option_digit = 10;
-	// Limited to 100 options just to simplify the calculation of digits
-	for (n = 0; n < enum_options_count; n++)
-	{
-		if (n == next_option_digit)
-		{
-			option_digits++;
-			next_option_digit *= 10;
-		}
-		// Each enum item has the following format: "  %d: \n"
-		const char *text = enum_options_text[n];
-		if (text == NULL)
-			text = undefined_text;
-		text_len += 2 + option_digits + 2 + strlen(text) + 1;
-	}
-	// '+1' for ending '\0'
-	*error_msg = malloc(text_len + 1);
-	char *text_cur = *error_msg;
-	text_cur += sprintf(text_cur, "%s\n%s", error_description, available_options);
-	for (n = 0; n < enum_options_count; n++)
-	{
-		const char *text = enum_options_text[n];
-		if (text == NULL)
-			text = undefined_text;
-		text_cur += sprintf(text_cur, "  %d: %s\n", n, text);
-	}
-	return 0;
-}
-
-char *settings_get_info(struct settings *settings)
-{
-	char *info;
-	asprintf(&info,
-			"AFE configuration\n"
-			" %u:%s\n"
-			" Gains tx:%u rx1:%u rx2:%u\n"
-			" CENELEC %s\n"
-			"TX\n"
-			" %u:%s\n"
-			" DAC at %u bps\n"
-			" DAC freq max %u kHz\n"
-			" %u:%s\n"
-			" Signal settings\n %u Hz, O:%u, R%u\n"
-			" Pregen: %u samples\n"
-			" TX buffer: %u\n"
-			"RX\n"
-			" %u:%s\n"
-			" %u:%s\n"
-			" ToFile: %u samples\n"
-			"Comm timeout: %u ms\n"
-			"Comm interval: %u ms\n"
-			"%s driver\n",
-			settings->operating_mode, operating_mode_enum_text[settings->operating_mode],
-			settings->tx.gain_tx_pga, settings->rx.gain_rx_pga1, settings->rx.gain_rx_pga2,
-			settings->cenelec_a ? "A" : "B/C/D",
-			settings->tx.tx_mode, spi_tx_mode_enum_text[settings->tx.tx_mode],
-			settings->tx.freq_bps,
-			(uint32_t) (freq_dac_sps / 2000.0),
-			settings->tx.stream_type, stream_type_enum_text[settings->tx.stream_type],
-			settings->tx.samples_freq, settings->tx.samples_offset, settings->tx.samples_range,
-			settings->tx.preload_buffer_len,
-			settings->tx.tx_buffers_len,
-			settings->rx.rx_mode, rx_mode_enum_text[settings->rx.rx_mode],
-			settings->rx.demod_mode, demodulation_mode_enum_text[settings->rx.demod_mode],
-			settings->rx.samples_to_file,
-			settings->communication_timeout_ms,
-			settings->communication_interval_ms,
-			settings->std_driver?"STD":"CUSTOM");
 	return info;
 }
 
-// POST_CONDITION: if (*error_msg != NULL) releate it after use with 'free'
-// NOTE: When adding a new option update the '--help' message above
-void settings_parse_args(struct settings *settings, int argc, char *argv[], char **error_msg)
+char *settings_get_info(struct settings *settings, struct encoder *encoder, struct decoder *decoder)
 {
-	int c;
-	opterr = 0;
-	*error_msg = NULL;
-	while ((c = getopt(argc, argv, "A:dD:F:H:I:L:N:O:P:R:S:T:U:W:xY:")) != -1)
-		switch (c)
-		{
-		case 'A':
-			if (!set_enum_value_with_checking(optarg, (int*) &settings->rx.rx_mode,
-					"Invalid ADC mode!", rx_mode_enum_text, rx_mode_COUNT, error_msg))
-				return;
-			break;
-		case 'd':
-			settings->std_driver = 1;
-			break;
-		case 'D':
-			settings->communication_timeout_ms = atoi(optarg + 1);
-			break;
-		case 'F':
-			settings->tx.freq_bps = atoi(optarg + 1) * 1000;
-			break;
-		case 'H':
-			settings->tx.samples_freq = atoi(optarg + 1);
-			break;
-		case 'I':
-			settings->communication_interval_ms = atoi(optarg + 1);
-			break;
-		case 'L':
-			settings->tx.samples_delay_us = atoi(optarg + 1);
-			break;
-		case 'N':
-			settings->tx.tx_buffers_len = atoi(optarg + 1);
-			break;
-		case 'O':
-			settings->tx.samples_offset = atoi(optarg + 1);
-			break;
-		case 'P':
-			if (!set_enum_value_with_checking(optarg, (int*) &settings->configuration_profile,
-					"Invalid configuration profile!", configuration_profile_enum_text, cfg_COUNT,
-					error_msg))
-				return;
-			break;
-		case 'R':
-			settings->tx.samples_range = atoi(optarg + 1);
-			break;
-		case 'S':
-			if (!set_enum_value_with_checking(optarg, (int*) &settings->tx.tx_mode,
-					"Invalid SPI transmission mode!", spi_tx_mode_enum_text, spi_tx_mode_COUNT,
-					error_msg))
-				return;
-			break;
-		case 'T':
-			if (!set_enum_value_with_checking(optarg, (int*) &settings->operating_mode,
-					"Invalid operating mode!", operating_mode_enum_text, operating_mode_COUNT,
-					error_msg))
-				return;
-			break;
-		case 'U':
-			settings->ui_plugin_name = strdup(optarg + 1);
-			break;
-		case 'W':
-			settings->rx.samples_to_file = atoi(optarg + 1);
-			break;
-		case 'x':
-			settings->autostart = 1;
-			break;
-		case 'Y':
-			if ((optarg[0] != ':') || (optarg[1] == '\0'))
-			{
-				asprintf(error_msg, "Invalid cycle type (-Y)!\nAvailable options:\n"
-						"0: Ramp\n1: Triangle\n2: Constant\n3: Freq max\n4: Freq max/2\n"
-						"5: Freq Sweep\n6: File '%s'\n7: Bit padding per cycle\n8: AM modulation\n"
-						"9: Freq sinus\n10: Freq sinus + OOK Pattern\n", settings->tx.dac_filename);
-				return;
-			}
-			settings->tx.stream_type = (enum stream_type_enum) atoi(optarg + 1);
-			break;
-		case '?':
-			if (optopt == 'c')
-				asprintf(error_msg, "Option -%c requires an argument\n", optopt);
-			else if (isprint(optopt))
-				asprintf(error_msg, "Unknown option '-%c'\n", optopt);
-			else
-				asprintf(error_msg, "Unknown option character '\\x%x'\n", optopt);
-			return;
-		default:
-			// The 'default' should never be reached
-			assert(0);
-		}
-	// Example to indicate all the invalid commands
-	//	int index;
-	//	for (index = optind; index < argc; index++)
-	//		printf("Non-option argument %s\n", argv[index]);
-	// For simplicity just create an error message for the first invalid command found
-	if (optind < argc)
+	char *app_info = NULL;
+	if ((settings->communication_timeout_ms != 0) || (settings->communication_interval_ms != 0)
+			|| settings->std_driver)
 	{
-		asprintf(error_msg, "Non-option argument %s\n", argv[optind]);
-		return;
+		asprintf(&app_info, "APP\n"
+				"  Comm timeout: %u ms\n"
+				"  Comm interval: %u ms\n"
+				"  %s driver\n", settings->communication_timeout_ms,
+				settings->communication_interval_ms, settings->std_driver ? "STD" : "CUSTOM");
 	}
-	settings_update(settings);
+	char *afe_info;
+	asprintf(&afe_info, "AFE\n"
+			" %u:%s\n"
+			" Gains tx:%u rx1:%u rx2:%u\n"
+			" CENELEC %s\n", settings->operating_mode,
+			operating_mode_enum_text[settings->operating_mode], settings->tx.gain_tx_pga,
+			settings->rx.gain_rx_pga1, settings->rx.gain_rx_pga2,
+			settings->cenelec_a ? "A" : "B/C/D");
+	char *tx_info = NULL;
+	if (settings->tx.tx_mode != spi_tx_mode_none)
+	{
+		char *encoder_info = NULL;
+		if (encoder)
+		{
+			char *encoder_settings = get_settings_list_info(encoder_get_settings(encoder));
+			asprintf(&encoder_info, "%s\n%s", encoder_get_name(encoder), encoder_settings);
+			free(encoder_settings);
+		}
+		asprintf(&tx_info, "TX\n"
+				" %u:%s\n"
+				" Sampling at %u ksps\n"
+				" Pregen: %u samples\n"
+				" TX buffer: %u\n"
+				"%s", settings->tx.tx_mode, spi_tx_mode_enum_text[settings->tx.tx_mode],
+				(uint32_t) (settings->tx.sampling_rate_sps / 1000.0),
+				settings->tx.preload_buffer_len, settings->tx.tx_buffers_len,
+				encoder_info ? encoder_info : "");
+		if (encoder_info)
+			free(encoder_info);
+	}
+	char *rx_info = NULL;
+	if (settings->rx.rx_mode != rx_mode_none)
+	{
+		char *decoder_info = NULL;
+		if (decoder)
+		{
+			char *decoder_settings = get_settings_list_info(decoder_get_settings(decoder));
+			asprintf(&decoder_info, "%s\n%s", decoder_get_name(decoder), decoder_settings);
+			free(decoder_settings);
+		}
+		asprintf(&rx_info, "RX\n"
+				" %u:%s\n"
+				" %u:%s\n"
+				" ToFile: %u samples\n"
+				"%s", settings->rx.rx_mode, rx_mode_enum_text[settings->rx.rx_mode],
+				settings->rx.demod_mode, demod_mode_enum_text[settings->rx.demod_mode],
+				settings->rx.samples_to_file, decoder_info ? decoder_info : "");
+		if (decoder_info)
+			free(decoder_info);
+	}
+	char *info;
+	asprintf(&info, "PROFILE: %s\n%s%s%s%s",
+			settings->configuration_profile ? settings->configuration_profile : "",
+			app_info ? app_info : "", afe_info ? afe_info : "", tx_info ? tx_info : "",
+			rx_info ? rx_info : "");
+	if (rx_info)
+		free(rx_info);
+	if (tx_info)
+		free(tx_info);
+	if (afe_info)
+		free(afe_info);
+	if (app_info)
+		free(app_info);
+	return info;
 }
 
-void settings_update(struct settings *settings)
+int settings_set_value(void *dst_data, enum plc_setting_type dst_type,
+		const struct plc_setting *setting_src)
 {
-	// SPI DAC valid frequencies = 187.5kHz, 375k, 750k, 1500k, 3M, 6M, 12M...
-	uint32_t target_freq = settings->tx.freq_bps;
-	for (settings->tx.freq_bps = 12000000; settings->tx.freq_bps > target_freq;
-			settings->tx.freq_bps /= 2)
-		;
-	// 10-data-bits + 0.5 clock between words (TCS) + 165ns CS pulse =
-	//	10.5 proportional factor + 165ns fixed time
-	freq_dac_sps = 1.0 / (10.5 / (float) settings->tx.freq_bps + 165e-9);
+	// TODO: Improve for better efficiency instead of going back and forth through a string
+	char *text = plc_setting_data_to_text(setting_src->type, &setting_src->data);
+	plc_setting_text_to_data(text, dst_type, (union plc_setting_data *) dst_data);
+	free(text);
+	return 0;
+}
+
+// TODO: Revise why the use of 'const' (recommended) produces several warnings
+//	typedef const struct plc_setting_extra_data plc_setting_extra_data_t;
+typedef struct plc_setting_extra_data plc_setting_extra_data_t;
+
+#define DECLARE_ENUM_CAPTIONS(enum_name) \
+		static plc_setting_extra_data_t enum_name ## _captions = { \
+			plc_setting_extra_data_enum_captions, { \
+				.enum_captions.captions = enum_name ## _enum_text, .enum_captions.captions_count = \
+				enum_name ## _COUNT } };
+
+DECLARE_ENUM_CAPTIONS(spi_tx_mode)
+DECLARE_ENUM_CAPTIONS(afe_gain_tx_pga)
+DECLARE_ENUM_CAPTIONS(rx_mode)
+DECLARE_ENUM_CAPTIONS(demod_mode)
+DECLARE_ENUM_CAPTIONS(afe_gain_rx_pga1)
+DECLARE_ENUM_CAPTIONS(afe_gain_rx_pga2)
+DECLARE_ENUM_CAPTIONS(operating_mode)
+
+#define OFFSET(member) offsetof(struct settings, member)
+
+static const struct plc_setting_definition app_accepted_settings[] = {
+	{
+		"tx_sampling_rate_sps", plc_setting_float, "TX DAC rate [sps]", {
+			.f = SAMPLING_FREQ_SPS_DEFAULT }, 0, NULL, OFFSET(tx.sampling_rate_sps) }, {
+		"preload_buffer_len", plc_setting_u32, "Preload buffer len", {
+			.u32 = 0 }, 0, NULL, OFFSET(tx.preload_buffer_len) }, {
+		"tx_buffers_len", plc_setting_u32, "TX buffers len", {
+			.u32 = 0 }, 0, NULL, OFFSET(tx.tx_buffers_len) }, {
+		"tx_mode", plc_setting_enum, "TX mode", {
+			.u32 = spi_tx_mode_none }, 1, &spi_tx_mode_captions, OFFSET(tx.tx_mode) }, {
+		"gain_tx_pga", plc_setting_enum, "Gain TX PGA", {
+			.u32 = afe_gain_tx_pga_025 }, 1, &afe_gain_tx_pga_captions, OFFSET(tx.gain_tx_pga) }, {
+		"rx_sampling_rate_sps", plc_setting_float, "RX ADC rate [sps]", {
+			.f = ADC_MAX_CAPTURE_RATE_SPS }, 0, NULL, OFFSET(rx.sampling_rate_sps) }, {
+		"rx_mode", plc_setting_enum, "RX mode", {
+			.u32 = rx_mode_none }, 1, &rx_mode_captions, OFFSET(rx.rx_mode) }, {
+		"rx_samples_filename", plc_setting_string, "RX samples filename", {
+			.s = RX_SAMPLES_FILENAME }, 0, NULL, OFFSET(rx.samples_filename) }, {
+		"rx_data_filename", plc_setting_string, "RX data filename", {
+			.s = RX_DATA_FILENAME }, 0, NULL, OFFSET(rx.data_filename) }, {
+		"samples_to_file", plc_setting_u32, "Samples to file", {
+			.u32 = 0 }, 0, NULL, OFFSET(rx.samples_to_file) }, {
+		"demod_mode", plc_setting_enum, "Samples to file", {
+			.u32 = demod_mode_none }, 1, &demod_mode_captions, OFFSET(rx.demod_mode) }, {
+		"data_offset", plc_setting_u16, "Data offset", {
+			.u16 = 500 }, 0, NULL, OFFSET(rx.data_offset) }, {
+		"data_hi_threshold_detection", plc_setting_u16, "Data HI Threshold detection", {
+			.u16 = 20 }, 0, NULL, OFFSET(rx.data_hi_threshold_detection) }, {
+		"gain_rx_pga1", plc_setting_enum, "Gain RX PGA1", {
+			.u32 = afe_gain_rx_pga1_025 }, 1, &afe_gain_rx_pga1_captions, OFFSET(rx.gain_rx_pga1) },
+	{
+		"gain_rx_pga2", plc_setting_enum, "Gain RX PGA2", {
+			.u32 = afe_gain_rx_pga2_1 }, 1, &afe_gain_rx_pga2_captions, OFFSET(rx.gain_rx_pga2) }, {
+		"operating_mode", plc_setting_enum, "Operating mode", {
+			.u32 = operating_mode_none }, 1, &operating_mode_captions, OFFSET(operating_mode) }, {
+		"cenelec_a", plc_setting_bool, "CENELEC A", {
+			.u32 = 0 }, 0, NULL, OFFSET(cenelec_a) }, {
+		"bit_width_us", plc_setting_u32, "Data Bit Width [us]", {
+			.u32 = 0 }, 0, NULL, OFFSET(bit_width_us) }, {
+		"autostart", plc_setting_bool, "Autostart", {
+			.u32 = 0 }, 0, NULL, OFFSET(autostart) }, {
+		"quietmode", plc_setting_bool, "Quiet mode", {
+			.u32 = 0 }, 0, NULL, OFFSET(quietmode) }, {
+		"communication_timeout_ms", plc_setting_u32, "Communication Timeout [ms]", {
+			.u32 = 0 }, 0, NULL, OFFSET(communication_timeout_ms) }, {
+		"communication_interval_ms", plc_setting_u32, "Communication Interval [ms]", {
+			.u32 = 0 }, 0, NULL, OFFSET(communication_interval_ms) } };
+
+#undef OFFSET
+
+int settings_set_app_settings(struct settings *settings, uint32_t settings_count,
+		const struct plc_setting settings_src[])
+{
+	uint32_t n;
+	const struct plc_setting *setting = settings_src;
+	for (n = settings_count; n > 0; n--, setting++)
+	{
+		const struct plc_setting_definition *setting_definition = plc_setting_find_definition(
+				app_accepted_settings, ARRAY_SIZE(app_accepted_settings), setting->identifier);
+		if (setting_definition != NULL)
+		{
+			union plc_setting_data *dst_data = (union plc_setting_data *) (((char *) settings)
+					+ setting_definition->user_data);
+			plc_setting_data_release(setting_definition->type, dst_data);
+			plc_setting_copy_convert_data(dst_data, setting_definition, setting);
+		}
+		else
+		{
+			log_format("Unknown application setting '%s'\n", setting->identifier);
+			assert(0);
+			return -1;
+		}
+	}
+	return 0;
 }

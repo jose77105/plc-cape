@@ -3,13 +3,17 @@
  * @brief	Analysis tools for the ADC received data
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
 #ifndef LIBPLC_ADC_ANALYSIS_H
 #define LIBPLC_ADC_ANALYSIS_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 enum plc_rx_statistics_mode
 {
@@ -87,5 +91,8 @@ const struct rx_statistics *plc_rx_analysis_get_statistics(struct plc_rx_analysi
 void plc_rx_analysis_report_rx_statistics_time(struct plc_rx_analysis *plc_rx_analysis,
 	uint32_t buffer_preparation_us);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LIBPLC_ADC_ANALYSIS_H */

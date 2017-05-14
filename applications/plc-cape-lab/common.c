@@ -2,7 +2,7 @@
  * @file
  * 
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -13,6 +13,15 @@
 #include <unistd.h>
 #include "+common/api/+base.h"
 #include "common.h"
+
+void safe_exit(void)
+{
+	log_line("Press a key to exit...");
+	getchar();
+	exit(EXIT_FAILURE);
+	// NOTE: 'abort' doesn't call 'atexit'
+	// abort();
+}
 
 void log_line(const char *text)
 {
@@ -40,25 +49,20 @@ void log_format(const char *format, ...)
 	va_end(args);
 }
 
-void log_and_exit(const char *text)
+void log_line_and_exit(const char *text)
 {
 	log_line(text);
-	log_line("Press a key to exit...");
-	getchar();
-	exit(EXIT_FAILURE);
+	safe_exit();
 }
 
 void log_errno_and_exit(const char *text)
 {
 	log_format("%s: %s\n", text, strerror(errno));
-	log_line("Press a key to exit...");
-	getchar();
-	exit(EXIT_FAILURE);
-	// NOTE: 'abort' doesn't call 'atexit'
-	// abort();
+	safe_exit();
 }
 
-void plc_trace(const char *function_name, const char *format, ...)
+#ifdef DEBUG
+void plc_trace_log(const char *function_name, const char *format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -69,3 +73,6 @@ void plc_trace(const char *function_name, const char *format, ...)
 	log_line("");
 	va_end(args);
 }
+
+void (*plc_trace)(const char *function_name, const char *format, ...) = plc_trace_log;
+#endif

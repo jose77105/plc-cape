@@ -1,0 +1,11 @@
+# Add 'update-resorces' to the 'make all' target
+all: update-resources
+
+RES_SRC_FILENAMES = $(notdir $(wildcard $(DEV_SRC_DIR)/applications/plc-cape-lab/res/*))
+RES_DST_FILES = $(patsubst %, $(DEV_BIN_DIR)/applications/plc-cape-lab/%, $(RES_SRC_FILENAMES))
+
+update-resources: $(RES_DST_FILES)
+
+$(DEV_BIN_DIR)/applications/plc-cape-lab/% :: $(DEV_SRC_DIR)/applications/plc-cape-lab/res/%
+	@echo 'Updating $@'
+	@-cp $< $@

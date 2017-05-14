@@ -2,11 +2,12 @@
  * @file
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
 
+#define _GNU_SOURCE		// asprintf
 #include <ctype.h>		// isspace
 #include <form.h>
 #include <ncurses.h>
@@ -76,6 +77,9 @@ static void tui_dialog_validate(struct tui_dialog *tui_dialog)
 			break;
 		case data_type_u32:
 			sscanf(dialog_text, "%u", item->data_ptr.u32);
+			break;
+		case data_type_float:
+			sscanf(dialog_text, "%f", item->data_ptr.f);
 			break;
 		case data_type_str:
 		{
@@ -239,7 +243,7 @@ struct tui_dialog *tui_dialog_create(struct tui_panel *parent,
 	struct tui_dialog *tui_dialog = (struct tui_dialog*) calloc(1, sizeof(struct tui_dialog));
 	tui_dialog->tui_panel.tui_panel_release = tui_dialog_panel_release;
 	tui_dialog->tui_panel.tui_panel_get_dimensions = tui_dialog_panel_get_dimensions;
-	tui_dialog->tui_panel.tui_panel_proces_key = tui_dialog_panel_process_key;
+	tui_dialog->tui_panel.tui_panel_process_key = tui_dialog_panel_process_key;
 	tui_dialog->tui_panel.parent = parent;
 	tui_dialog->callbacks_handle = callbacks_handle;
 	tui_dialog->on_cancel = on_cancel;
@@ -308,7 +312,7 @@ struct tui_dialog *tui_dialog_create(struct tui_panel *parent,
 		case data_type_i32:
 			// TODO: Restrict to valid input. Check because not all the options seems to work
 			// set_field_type(*cur_field, TYPE_INTEGER, 1, 0, 2000);
-			sprintf(field_text_int, "%i", *item->data_ptr.i32);
+			sprintf(field_text_int, "%d", *item->data_ptr.i32);
 			break;
 		case data_type_u16:
 			sprintf(field_text_int, "%hu", *item->data_ptr.u16);
@@ -316,6 +320,15 @@ struct tui_dialog *tui_dialog_create(struct tui_panel *parent,
 		case data_type_u32:
 			sprintf(field_text_int, "%u", *item->data_ptr.u32);
 			break;
+		case data_type_float:
+		{
+			char *field_text_float;
+			asprintf(&field_text_float, "%.2f", *item->data_ptr.f);
+			set_field_buffer(*cur_field, 0, field_text_float);
+			free(field_text_float);
+			use_field_text_int = 0;
+			break;
+		}
 		case data_type_str:
 			if (*item->data_ptr.str)
 				set_field_buffer(*cur_field, 0, *item->data_ptr.str);
@@ -326,8 +339,8 @@ struct tui_dialog *tui_dialog_create(struct tui_panel *parent,
 			struct ui_dialog_list *list = &item->data_ptr.list;
 			set_field_buffer(*cur_field, 0, list->items[*list->index]);
 			use_field_text_int = 0;
-		}
 			break;
+		}
 		case data_type_callbacks:
 		{
 			struct callbacks *callbacks = &item->data_ptr.callbacks;

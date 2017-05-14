@@ -3,7 +3,7 @@
  * @brief	Reception engine for the incoming signals
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -21,8 +21,8 @@ enum rx_mode_enum
 	rx_mode_COUNT
 };
 
-extern const char *demodulation_mode_enum_text[];
-enum demodulation_mode_enum
+extern const char *demod_mode_enum_text[];
+enum demod_mode_enum
 {
 	demod_mode_none = 0,
 	demod_mode_real_time,
@@ -33,10 +33,12 @@ enum demodulation_mode_enum
 struct rx_settings
 {
 	enum rx_mode_enum rx_mode;
-	enum demodulation_mode_enum demod_mode;
+	float capturing_rate_sps;
+	enum demod_mode_enum demod_mode;
+	const char *samples_filename;
+	const char *data_filename;
 	uint32_t samples_to_file;
-	uint32_t data_bit_us;
-	uint16_t demod_data_hi_threshold;
+	uint32_t bit_width_us;
 	uint16_t data_offset;
 	uint16_t data_hi_threshold_detection;
 };
@@ -51,7 +53,7 @@ struct settings;
 struct rx *rx_create(const struct rx_settings *settings, struct monitor *monitor,
 		struct plc_leds *leds, struct plc_adc *plc_adc, struct decoder *decoder);
 void rx_release(struct rx *rx);
-void rx_start_capture(struct rx *rx);
+int rx_start_capture(struct rx *rx);
 void rx_stop_capture(struct rx *rx);
 
 #endif /* RX_H */

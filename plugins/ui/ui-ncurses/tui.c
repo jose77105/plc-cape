@@ -24,13 +24,14 @@
  *		along with plc-cape project.  If not, see <http://www.gnu.org/licenses/>. 
  *
  * @copyright
- *	Copyright (C) 2016 Jose Maria Ortega
+ *	Copyright (C) 2016-2017 Jose Maria Ortega
  * 
  * @endcond
  */
 
 #include <ncurses.h>
 #include <panel.h>
+#include <pthread.h>		// pthread_mutex_t
 #include "+common/api/+base.h"
 #include "+common/api/logger.h"
 #include "common.h"
@@ -72,6 +73,8 @@ struct tui_rect
 //	"polymorfism"
 struct tui
 {
+	// For simplicity, lock the access to multi-threaded calls
+	pthread_mutex_t lock;
 	ui_callbacks_h callbacks_handle;
 	int quit;
 	int main_menu_width;
@@ -182,7 +185,17 @@ void tui_draw_borders(struct tui *tui)
 struct tui *tui_create(const char *title, const struct ui_menu_item *main_menu_items,
 		uint32_t main_menu_items_count, ui_callbacks_h callbacks_handle)
 {
+	int ret;
 	struct tui *tui = (struct tui*) calloc(1, sizeof(struct tui));
+	pthread_mutexattr_t mutex_attr;
+	ret = pthread_mutexattr_init(&mutex_attr);
+	assert(ret == 0);
+	// PTHREAD_MUTEX_RECURSIVE to deal with mutex_lock within the same thread without blocking
+	ret = pthread_mutexattr_settype(&mutex_attr, PTHREAD_MUTEX_RECURSIVE);
+	assert(ret == 0);
+	ret = pthread_mutex_init(&tui->lock, &mutex_attr);
+	assert(ret == 0);
+	ret = pthread_mutexattr_destroy(&mutex_attr);
 	// Start ncurses mode
 	initscr();
 	// hide_cursor
@@ -206,7 +219,7 @@ struct tui *tui_create(const char *title, const struct ui_menu_item *main_menu_i
 	// Menu Window
 	tui->callbacks_handle = callbacks_handle;
 	struct tui_menu *tui_menu = tui_menu_create(
-		NULL, main_menu_items, main_menu_items_count, title, NULL, callbacks_handle);
+		NULL, main_menu_items, main_menu_items_count, title, NULL, callbacks_handle, &tui->lock);
 	int menu_y, menu_x, menu_rows, menu_cols;
 	tui_set_active_panel(tui, tui_menu_get_as_panel(tui_menu));
 	tui->active_panel->tui_panel_get_dimensions(tui->active_panel,
@@ -260,14 +273,17 @@ void tui_release(struct tui *tui)
 	delwin(tui->log_window);
 	delwin(tui->log_border_window);
 	endwin();
+	pthread_mutex_destroy(&tui->lock);
 	free(tui);
 }
 
 void tui_log_text(struct tui *tui, const char *text)
 {
+	pthread_mutex_lock(&tui->lock);
 	wprintw(tui->log_window, text);
 	update_panels();
 	doupdate();
+	pthread_mutex_unlock(&tui->lock);
 }
 
 void tui_resize(struct tui *tui)
@@ -288,6 +304,7 @@ void tui_resize(struct tui *tui)
 			&layout[tui_windows_log_border], NULL);
 	tui_resize_panel(tui->log_panel, &tui->log_window, &layout[tui_windows_log],
 			tui->log_border_window);
+	scrollok(tui->log_window, TRUE);
 	tui_resize_panel(tui->settings_border_panel, &tui->settings_border_window,
 			&layout[tui_windows_settings_border], NULL);
 	tui_resize_panel(tui->settings_panel, &tui->settings_window, &layout[tui_windows_settings],
@@ -322,6 +339,7 @@ ATTR_INTERN void tui_active_panel_close(struct tui *tui)
 
 void tui_refresh(struct tui *tui)
 {
+	pthread_mutex_lock(&tui->lock);
 	// This forces the entire screen to be redrawn
 	// It is required if we do something wrong with the UIç
 	// For example, if we manage 'ncurses' from different threads it could become corrupted
@@ -329,6 +347,7 @@ void tui_refresh(struct tui *tui)
 	// they think the screen is properly painted
 	// For such cases, a 'wrefresh(curscr)' it's good. It redraws the entire screen from scratch
 	wrefresh(curscr);
+	pthread_mutex_unlock(&tui->lock);
 }
 
 void tui_do_menu_loop(struct tui *tui)
@@ -339,10 +358,12 @@ void tui_do_menu_loop(struct tui *tui)
 	{
 		// The 'getch' can be configured in timeout mode to, for example, have a chance to
 		//	periodically refresh the UI: wtimeout(tui->active_panel->window, 1000)
-		switch(c = getch())
+		c = getch();
+		pthread_mutex_lock(&tui->lock);
+		switch(c)
 		{
 		case KEY_F(5):
-			tui_refresh(tui);
+			wrefresh(curscr);
 			break;
 		case KEY_RESIZE:
 			tui_resize(tui);
@@ -350,14 +371,18 @@ void tui_do_menu_loop(struct tui *tui)
 		case ERR:
 			break;
 		default:
-			tui->active_panel->tui_panel_proces_key(tui->active_panel, c);
+			// NOTE: Some panels (as 'tui_menu') can assume that the 'tui->lock' is locked
+			//	and temporally unlock on callback execution to avoid deadlocks
+			tui->active_panel->tui_panel_process_key(tui->active_panel, c);
 		}
+		pthread_mutex_unlock(&tui->lock);
 	}
 	tui_log_text(tui, "Quitting...\n");
 }
 
 void tui_set_event(struct tui *tui, uint32_t id, uint32_t data)
 {
+	pthread_mutex_lock(&tui->lock);
 	// TODO: Refactor for a configurable amount of flags (TX, RX, INT...)
 	int x;
 	int attr;
@@ -388,14 +413,21 @@ void tui_set_event(struct tui *tui, uint32_t id, uint32_t data)
 		}
 		break;
 	}
-	if (!text)
-		return;
-	wattron(tui->flags_window, attr);
-	// 'mvwprintw' = 'move' + 'wprintw'
-	mvwprintw(tui->flags_window, 0, x, text);
-	wattroff(tui->flags_window, attr);
-	update_panels();
-	doupdate();
+	if (text)
+	{
+		wattron(tui->flags_window, attr);
+		// 'mvwprintw' = 'move' + 'wprintw'
+		mvwprintw(tui->flags_window, 0, x, text);
+		wattroff(tui->flags_window, attr);
+		update_panels();
+		doupdate();
+	}
+	pthread_mutex_unlock(&tui->lock);
+}
+
+ATTR_INTERN pthread_mutex_t *tui_get_lock(struct tui *tui)
+{
+	return &tui->lock;
 }
 
 ATTR_INTERN ui_callbacks_h tui_get_callbacks_handle(struct tui *tui)
@@ -415,6 +447,7 @@ ATTR_INTERN void tui_set_active_panel(struct tui *tui, struct tui_panel *panel)
 
 void tui_set_info(struct tui *tui, enum ui_info_enum info_type, const void *info_data)
 {
+	pthread_mutex_lock(&tui->lock);
 	switch (info_type)
 	{
 	case ui_info_settings_text:
@@ -438,6 +471,7 @@ void tui_set_info(struct tui *tui, enum ui_info_enum info_type, const void *info
 	default:
 		assert(0);
 	}
+	pthread_mutex_unlock(&tui->lock);
 }
 
 void PLUGIN_API_SET_SINGLETON_PROVIDER(singletons_provider_get_t callback,

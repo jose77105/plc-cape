@@ -3,7 +3,7 @@
  * @brief	Declarations of symbols specific to the _BeagleBone Black_
  *
  * @cond COPYRIGHT_NOTES @copyright
- *	Copyright (C) 2016 Jose Maria Ortega\n
+ *	Copyright (C) 2016-2017 Jose Maria Ortega\n
  *	Distributed under the GNU GPLv3. For full terms see the file LICENSE
  * @endcond
  */
@@ -47,6 +47,10 @@
 //		Used in the Adafruit schematics in the form GPIOn_m
 //	* GPIO_n: GPIO bank-indepedent name, used in http://beagleboard.org/support/bone101
 //		Other context-base names are also used there, as UART*
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // GPIO0[30]; GPIO_30 | UART4_RXD
 #define GPIO_P9_11_MASK (1<<30)
@@ -94,5 +98,11 @@
 #define GPIO_P9_28_NUMBER 113
 #define GPIO_P9_28_MASK (1<<17)
 #define GPIO_P9_28_BANK 3
+
+#define ADC_MAX_CAPTURE_RATE_SPS 200000.0
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* COMMON_BBB_H */

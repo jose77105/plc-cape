@@ -24,7 +24,7 @@
  *		along with plc-cape project.  If not, see <http://www.gnu.org/licenses/>. 
  *
  * @copyright
- *	Copyright (C) 2016 Jose Maria Ortega
+ *	Copyright (C) 2016-2017 Jose Maria Ortega
  * 
  * @endcond
  */
@@ -142,4 +142,9 @@ ATTR_EXTERN struct plc_afe *plc_cape_get_afe(struct plc_cape *plc_cape)
 ATTR_EXTERN struct plc_leds *plc_cape_get_leds(struct plc_cape *plc_cape)
 {
 	return plc_cape->plc_leds;
+}
+
+ATTR_EXTERN int plc_cape_in_emulation(struct plc_cape *plc_cape)
+{
+	return plc_cape_emulation;
 }

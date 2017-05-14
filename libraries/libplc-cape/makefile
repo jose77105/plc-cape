@@ -1,3 +1,4 @@
+ADDITIONAL_PLC_LIBS = plc-tools
 ADDITIONAL_HEADERS = \
 	$(DEV_SRC_DIR)/+common/api/*.h \
 	api/*.h

@@ -19,15 +19,19 @@ libplc-tools {#library-libplc-tools}
 	This version of the library covers these areas:
 	<ul>
 		<li><b>application</b>: @copybrief libplc-tools/api/application.h
+		<li><b>cmdline</b>: @copybrief libplc-tools/api/cmdline.h
 		<li><b>file</b>: @copybrief libplc-tools/api/file.h
 		<li><b>plugin</b>: @copybrief libplc-tools/api/plugin.h
+		<li><b>settings</b>: @copybrief libplc-tools/api/settings.h
+		<li><b>signal</b>: @copybrief libplc-tools/api/signal.h
 		<li><b>terminal_io</b>: @copybrief libplc-tools/api/terminal_io.h
 		<li><b>time</b>: @copybrief libplc-tools/api/time.h
 		<li><b>trace</b>: @copybrief libplc-tools/api/trace.h
 	</ul>
 <tr>
 	<td><b>Dependencies</b><td>
-	<b>librt</b>: for some time-measurement functions
+	<b>librt</b>: time.h
+	<b>libm</b>: signal.h
 <tr>
 	<td><b>API help</b>
 	<td>@link ./libraries/libplc-tools/api @endlink
