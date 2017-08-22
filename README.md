@@ -9,7 +9,8 @@ for Communications over Power Lines (PLC).
 
 Full documentation about the software framework (and some electronics) is available at
 [PlcCapeSoftwareFramework.pdf](http://upcommons.upc.edu/bitstream/handle/2117/98244/PlcCapeSoftwareFramework.pdf)
-Documentation about the electronic framework is in progress
+Documentation about the electronic framework is available at
+[PlcCapeElectronicFramework.pdf](http://upcommons.upc.edu/bitstream/handle/2117/105490/PlcCapeElectronicFramework.pdf)
 
 
 ## VERSIONS
